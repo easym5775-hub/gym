@@ -1,4 +1,13 @@
-import type { CheckIn, Client, Exercise, Meal, PlanItem } from "../types";
+import type {
+  CheckIn,
+  Client,
+  Exercise,
+  Meal,
+  Payment,
+  PlanItem,
+  Session,
+  Subscription,
+} from "../types";
 import type { ConnectionConfig, DataProvider, EntityOp, RemoteData } from "./dataProvider";
 import {
   getMetadata,
@@ -33,7 +42,11 @@ const COMMON = ["id", "coach_id", "created_at", "updated_at"];
 
 export const SCHEMA: Record<string, string[]> = {
   Coaches: ["id", "name", "email", "created_at", "updated_at"],
-  Clients: [...COMMON, "name", "phone", "email", "gender", "age", "goal", "status", "join_date", "notes", "photo"],
+  Clients: [
+    ...COMMON,
+    "name", "phone", "email", "gender", "age", "goal", "status", "join_date", "notes", "photo",
+    "follow_up_days", "last_follow_up", "coach_notes", "nutrition_targets",
+  ],
   Subscriptions: [...COMMON, "client_id", "plan_name", "start_date", "end_date", "price", "status"],
   Payments: [...COMMON, "client_id", "subscription_id", "amount", "payment_date", "payment_method", "status", "notes"],
   Sessions: [...COMMON, "client_id", "date", "time", "type", "status", "notes"],
@@ -52,13 +65,16 @@ export const SCHEMA: Record<string, string[]> = {
 
 export const TAB_NAMES = Object.keys(SCHEMA);
 
-/** The five collections the UI reads/writes, mapped to their tabs. */
+/** The collections the UI reads/writes, mapped to their tabs. */
 const ENTITY_SHEET: Record<EntityOp["entity"], string> = {
   client: "Clients",
   exercise: "Exercises",
   plan: "WorkoutPlans",
   checkin: "CheckIns",
   meal: "Meals",
+  subscription: "Subscriptions",
+  payment: "Payments",
+  session: "Sessions",
 };
 
 /* ------------------------------------------------------------------ */
@@ -68,16 +84,33 @@ const ENTITY_SHEET: Record<EntityOp["entity"], string> = {
 /** Sheets cells cap at 50k chars; drop oversized base64 photos so a write never fails. */
 const safePhoto = (p?: string) => (p && p.length < 45000 ? p : "");
 
+/** JSON columns stored as text cells (parsed defensively on read). */
+const toJsonCell = (v: unknown) => (v === undefined ? "" : JSON.stringify(v));
+const fromJsonCell = <T,>(raw: unknown): T | undefined => {
+  if (raw === "" || raw === undefined || raw === null) return undefined;
+  try {
+    return JSON.parse(String(raw)) as T;
+  } catch {
+    return undefined;
+  }
+};
+
 const clientToRow = (c: Client): Row => ({
   id: c.id,
   name: c.name,
   phone: c.phone,
   email: c.email,
+  gender: c.gender ?? "",
+  age: c.age ?? "",
   goal: c.goal,
   status: c.status,
   join_date: c.startDate,
   notes: c.notes,
   photo: safePhoto(c.photo),
+  follow_up_days: c.followUpDays ?? "",
+  last_follow_up: c.lastFollowUp ?? "",
+  coach_notes: toJsonCell(c.coachNotes),
+  nutrition_targets: toJsonCell(c.nutritionTargets),
 });
 
 const rowToClient = (r: Row): Client => ({
@@ -85,11 +118,17 @@ const rowToClient = (r: Row): Client => ({
   name: String(r.name ?? ""),
   phone: String(r.phone ?? ""),
   email: String(r.email ?? ""),
+  gender: r.gender ? (String(r.gender) as Client["gender"]) : undefined,
+  age: r.age === "" || r.age === undefined ? undefined : Number(r.age),
   goal: (r.goal as Client["goal"]) || "General fitness",
   status: (r.status as Client["status"]) || "Active",
   startDate: String(r.join_date ?? ""),
   notes: String(r.notes ?? ""),
   photo: r.photo ? String(r.photo) : undefined,
+  followUpDays: r.follow_up_days === "" || r.follow_up_days === undefined ? undefined : Number(r.follow_up_days),
+  lastFollowUp: r.last_follow_up ? String(r.last_follow_up) : undefined,
+  coachNotes: fromJsonCell<Client["coachNotes"]>(r.coach_notes),
+  nutritionTargets: fromJsonCell<Client["nutritionTargets"]>(r.nutrition_targets),
 });
 
 const exerciseToRow = (e: Exercise): Row => ({
@@ -182,6 +221,69 @@ const rowToMeal = (r: Row): Meal => ({
   fats: Number(r.fats) || 0,
 });
 
+const subscriptionToRow = (s: Subscription): Row => ({
+  id: s.id,
+  client_id: s.clientId,
+  plan_name: s.planName,
+  start_date: s.startDate,
+  end_date: s.endDate,
+  price: s.price,
+  status: s.paymentStatus,
+});
+
+const rowToSubscription = (r: Row): Subscription => ({
+  id: String(r.id),
+  clientId: String(r.client_id ?? ""),
+  planName: String(r.plan_name ?? ""),
+  startDate: String(r.start_date ?? ""),
+  endDate: String(r.end_date ?? ""),
+  price: Number(r.price) || 0,
+  paymentStatus: (r.status as Subscription["paymentStatus"]) || "Pending",
+  createdAt: Number(r.created_at) || 0,
+});
+
+const paymentToRow = (p: Payment): Row => ({
+  id: p.id,
+  client_id: p.clientId,
+  subscription_id: p.subscriptionId ?? "",
+  amount: p.amount,
+  payment_date: p.date,
+  payment_method: p.method,
+  status: p.status,
+  notes: p.notes,
+});
+
+const rowToPayment = (r: Row): Payment => ({
+  id: String(r.id),
+  clientId: String(r.client_id ?? ""),
+  subscriptionId: r.subscription_id ? String(r.subscription_id) : undefined,
+  amount: Number(r.amount) || 0,
+  date: String(r.payment_date ?? ""),
+  method: (r.payment_method as Payment["method"]) || "Cash",
+  status: (r.status as Payment["status"]) || "Paid",
+  notes: String(r.notes ?? ""),
+});
+
+const sessionToRow = (s: Session): Row => ({
+  id: s.id,
+  client_id: s.clientId,
+  date: s.date,
+  time: s.time,
+  type: s.type,
+  status: s.status,
+  notes: s.notes,
+});
+
+const rowToSession = (r: Row): Session => ({
+  id: String(r.id),
+  clientId: String(r.client_id ?? ""),
+  date: String(r.date ?? ""),
+  time: String(r.time ?? ""),
+  type: String(r.type ?? ""),
+  status: (r.status as Session["status"]) || "Scheduled",
+  notes: String(r.notes ?? ""),
+});
+
 const FIELD_MAP: Record<string, string> = { clientId: "client_id", exerciseId: "exercise_id" };
 
 const toUpsertRow = (op: Extract<EntityOp, { type: "upsert" }>): Row => {
@@ -196,6 +298,12 @@ const toUpsertRow = (op: Extract<EntityOp, { type: "upsert" }>): Row => {
       return checkInToRow(op.record);
     case "meal":
       return mealToRow(op.record);
+    case "subscription":
+      return subscriptionToRow(op.record);
+    case "payment":
+      return paymentToRow(op.record);
+    case "session":
+      return sessionToRow(op.record);
   }
 };
 
@@ -216,12 +324,15 @@ export const googleSheetsProvider: DataProvider = {
   },
 
   async load(cfg) {
-    const [clients, exercises, plans, checkIns, meals] = await Promise.all([
+    const [clients, exercises, plans, checkIns, meals, subscriptions, payments, sessions] = await Promise.all([
       readRecords(cfg, "Clients"),
       readRecords(cfg, "Exercises"),
       readRecords(cfg, "WorkoutPlans"),
       readRecords(cfg, "CheckIns"),
       readRecords(cfg, "Meals"),
+      readRecords(cfg, "Subscriptions"),
+      readRecords(cfg, "Payments"),
+      readRecords(cfg, "Sessions"),
     ]);
     return {
       clients: clients.map(rowToClient),
@@ -229,6 +340,9 @@ export const googleSheetsProvider: DataProvider = {
       plans: plans.map(rowToPlan),
       checkIns: checkIns.map(rowToCheckIn),
       meals: meals.map(rowToMeal),
+      subscriptions: subscriptions.map(rowToSubscription),
+      payments: payments.map(rowToPayment),
+      sessions: sessions.map(rowToSession),
     } satisfies RemoteData;
   },
 

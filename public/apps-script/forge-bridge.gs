@@ -21,7 +21,7 @@
 
 var SCHEMA = {
   Coaches: ['id', 'name', 'email', 'created_at', 'updated_at'],
-  Clients: ['id', 'coach_id', 'created_at', 'updated_at', 'name', 'phone', 'email', 'gender', 'age', 'goal', 'status', 'join_date', 'notes', 'photo'],
+  Clients: ['id', 'coach_id', 'created_at', 'updated_at', 'name', 'phone', 'email', 'gender', 'age', 'goal', 'status', 'join_date', 'notes', 'photo', 'follow_up_days', 'last_follow_up', 'coach_notes', 'nutrition_targets'],
   Subscriptions: ['id', 'coach_id', 'created_at', 'updated_at', 'client_id', 'plan_name', 'start_date', 'end_date', 'price', 'status'],
   Payments: ['id', 'coach_id', 'created_at', 'updated_at', 'client_id', 'subscription_id', 'amount', 'payment_date', 'payment_method', 'status', 'notes'],
   Sessions: ['id', 'coach_id', 'created_at', 'updated_at', 'client_id', 'date', 'time', 'type', 'status', 'notes'],
@@ -38,7 +38,7 @@ var SCHEMA = {
   Settings: ['coach_id', 'key', 'value', 'updated_at']
 };
 
-var TABS_USED = ['Clients', 'Exercises', 'WorkoutPlans', 'CheckIns', 'Meals'];
+var TABS_USED = ['Clients', 'Exercises', 'WorkoutPlans', 'CheckIns', 'Meals', 'Subscriptions', 'Payments', 'Sessions'];
 
 /* ------------------------------ entry points ----------------------------- */
 

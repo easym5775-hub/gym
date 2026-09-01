@@ -2,16 +2,15 @@ import { useEffect, useState } from "react";
 import type { Meal, MealType } from "../types";
 import { MEAL_META, MEAL_TYPES } from "../types";
 import { useApp } from "../store";
-import { Badge, ConfirmModal, EmptyState, SectionCard, btnVolt, inputCls, labelCls } from "./ui";
+import { Badge, ConfirmModal, EmptyState, SectionCard, inputCls, labelCls } from "./ui";
 import { MealFormModal } from "./modals";
 import { IconFlame, IconPencil, IconPlus, IconTrash, IconUtensils } from "../icons";
 
-const MACRO_COLORS: Record<string, string> = {
-  protein: "bg-volt-400",
-  carbs: "bg-sky-400",
-  fats: "bg-warn-400",
-};
-
+/**
+ * Nutrition / Meals management (Coach Mode).
+ * Meal *assignments* live here; the per-client nutrition *targets*
+ * (calories / macros / water) are edited from the Client Profile.
+ */
 export function MealsView({ presetClientId }: { presetClientId: string | null }) {
   const { state, deleteMeal } = useApp();
   const [clientId, setClientId] = useState(presetClientId ?? state.clients[0]?.id ?? "");
@@ -53,7 +52,7 @@ export function MealsView({ presetClientId }: { presetClientId: string | null })
           <h1 className="font-display text-4xl font-bold uppercase leading-none tracking-tight text-mist-100 sm:text-5xl">
             Meal <span className="text-volt-400">plans</span>
           </h1>
-          <p className="mt-2 text-sm text-mist-400">Daily nutrition targets assigned per client</p>
+          <p className="mt-2 text-sm text-mist-400">Daily meals assigned per client — targets are set in the Client Profile</p>
         </div>
         <div className="w-full sm:w-64">
           <label className={labelCls}>Client</label>
@@ -85,17 +84,17 @@ export function MealsView({ presetClientId }: { presetClientId: string | null })
                     {totals.calories.toLocaleString("en-US")}
                     <span className="ms-1.5 text-sm font-semibold text-mist-500">kcal / day</span>
                   </p>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-mist-500">{client.name}'s daily target</p>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-mist-500">{client.name}'s assigned meals</p>
                 </div>
               </div>
               <div className="flex gap-5">
                 {(
                   [
-                    ["Protein", totals.protein, "P", "text-volt-300"],
-                    ["Carbs", totals.carbs, "C", "text-sky-300"],
-                    ["Fats", totals.fats, "F", "text-warn-300"],
+                    ["Protein", totals.protein, "text-volt-300"],
+                    ["Carbs", totals.carbs, "text-sky-300"],
+                    ["Fats", totals.fats, "text-warn-300"],
                   ] as const
-                ).map(([label, v, , tone]) => (
+                ).map(([label, v, tone]) => (
                   <div key={label} className="text-center">
                     <p className={`font-display text-2xl font-bold ${tone}`}>{v}g</p>
                     <p className="text-[10px] font-bold uppercase tracking-wider text-mist-500">{label}</p>
@@ -104,18 +103,18 @@ export function MealsView({ presetClientId }: { presetClientId: string | null })
               </div>
             </div>
             {kcalSum > 0 && (
-              <div className="mt-4 flex h-2.5 overflow-hidden rounded-full bg-night-700">
-                <div className="bar-grow h-full bg-volt-400" style={{ width: `${(kcalFrom.protein / kcalSum) * 100}%`, animationDelay: "100ms" }} title={`Protein ${kcalFrom.protein} kcal`} />
-                <div className="bar-grow h-full bg-sky-400" style={{ width: `${(kcalFrom.carbs / kcalSum) * 100}%`, animationDelay: "200ms" }} title={`Carbs ${kcalFrom.carbs} kcal`} />
-                <div className="bar-grow h-full bg-warn-400" style={{ width: `${(kcalFrom.fats / kcalSum) * 100}%`, animationDelay: "300ms" }} title={`Fats ${kcalFrom.fats} kcal`} />
-              </div>
-            )}
-            {kcalSum > 0 && (
-              <div className="mt-2 flex gap-4 text-[10.5px] font-bold text-mist-500">
-                <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-volt-400" />Protein {Math.round((kcalFrom.protein / kcalSum) * 100)}%</span>
-                <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-sky-400" />Carbs {Math.round((kcalFrom.carbs / kcalSum) * 100)}%</span>
-                <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-warn-400" />Fats {Math.round((kcalFrom.fats / kcalSum) * 100)}%</span>
-              </div>
+              <>
+                <div className="mt-4 flex h-2.5 overflow-hidden rounded-full bg-night-700">
+                  <div className="bar-grow h-full bg-volt-400" style={{ width: `${(kcalFrom.protein / kcalSum) * 100}%`, animationDelay: "100ms" }} title={`Protein ${kcalFrom.protein} kcal`} />
+                  <div className="bar-grow h-full bg-sky-400" style={{ width: `${(kcalFrom.carbs / kcalSum) * 100}%`, animationDelay: "200ms" }} title={`Carbs ${kcalFrom.carbs} kcal`} />
+                  <div className="bar-grow h-full bg-warn-400" style={{ width: `${(kcalFrom.fats / kcalSum) * 100}%`, animationDelay: "300ms" }} title={`Fats ${kcalFrom.fats} kcal`} />
+                </div>
+                <div className="mt-2 flex gap-4 text-[10.5px] font-bold text-mist-500">
+                  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-volt-400" />Protein {Math.round((kcalFrom.protein / kcalSum) * 100)}%</span>
+                  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-sky-400" />Carbs {Math.round((kcalFrom.carbs / kcalSum) * 100)}%</span>
+                  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-warn-400" />Fats {Math.round((kcalFrom.fats / kcalSum) * 100)}%</span>
+                </div>
+              </>
             )}
           </div>
 
@@ -198,13 +197,12 @@ export function MealsView({ presetClientId }: { presetClientId: string | null })
         open={!!deleting}
         onClose={() => setDeleting(null)}
         title="Remove meal?"
-        message={<>"{deleting?.description}" will be removed from the plan.</>}
+        message={<>
+          "{deleting?.description}" will be removed from the plan.
+        </>}
         confirmLabel="Remove"
         onConfirm={() => deleting && deleteMeal(deleting.id)}
       />
     </div>
   );
 }
-
-/* keep the unused-import linter calm for MACRO_COLORS (used via legend colors inline) */
-void MACRO_COLORS;

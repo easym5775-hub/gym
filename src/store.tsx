@@ -7,8 +7,21 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { AppState, CheckIn, Client, Exercise, Meal, PlanItem } from "./types";
-import { fmtDate, todayISO, uid } from "./lib";
+import type {
+  AppState,
+  CheckIn,
+  Client,
+  CoachNote,
+  Exercise,
+  Meal,
+  NutritionTargets,
+  Payment,
+  PlanItem,
+  Session,
+  SessionStatus,
+  Subscription,
+} from "./types";
+import { addDays, diffDays, fmtDate, todayISO, uid } from "./lib";
 import { makeSeed } from "./seed";
 import type { ConnectionConfig, EntityOp, RemoteData, SyncInfo } from "./services/dataProvider";
 import { errorMessage } from "./services/dataProvider";
@@ -53,6 +66,30 @@ interface Store {
   deleteMeal: (id: string) => void;
 
   addCheckIn: (data: Omit<CheckIn, "id" | "ts">) => void;
+  deleteCheckIn: (id: string) => void;
+
+  /* ---- subscriptions & payments ---- */
+  addSubscription: (data: Omit<Subscription, "id" | "createdAt">) => Subscription;
+  updateSubscription: (sub: Subscription) => void;
+  /** Creates a NEW subscription record (history is never overwritten). */
+  renewSubscription: (sub: Subscription) => Subscription;
+  addPayment: (data: Omit<Payment, "id">) => Payment;
+  updatePayment: (p: Payment) => void;
+  deletePayment: (id: string) => void;
+
+  /* ---- sessions ---- */
+  addSession: (data: Omit<Session, "id">) => Session;
+  updateSession: (s: Session) => void;
+  deleteSession: (id: string) => void;
+  setSessionStatus: (id: string, status: SessionStatus) => void;
+
+  /* ---- coach notes / follow-ups / nutrition targets ---- */
+  addCoachNote: (clientId: string, text: string) => void;
+  updateCoachNote: (clientId: string, noteId: string, text: string) => void;
+  deleteCoachNote: (clientId: string, noteId: string) => void;
+  setFollowUpDays: (clientId: string, days: number) => void;
+  markFollowUpDone: (clientId: string) => void;
+  setNutritionTargets: (clientId: string, targets: NutritionTargets) => void;
 
   resetData: () => void;
 
@@ -77,16 +114,28 @@ interface Store {
 const Ctx = createContext<Store>(null!);
 
 function load(): AppState {
+  let base: Partial<AppState> | null = null;
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as AppState;
-      if (parsed && Array.isArray(parsed.clients)) return parsed;
+      const parsed = JSON.parse(raw) as Partial<AppState>;
+      if (parsed && Array.isArray(parsed.clients)) base = parsed;
     }
   } catch {
     /* corrupted storage — fall through to seed */
   }
-  return makeSeed();
+  const src = base ?? makeSeed();
+  // Migration-safe: older caches may lack the newer collections.
+  return {
+    clients: src.clients ?? [],
+    exercises: src.exercises ?? [],
+    plans: src.plans ?? [],
+    checkIns: src.checkIns ?? [],
+    meals: src.meals ?? [],
+    subscriptions: src.subscriptions ?? [],
+    payments: src.payments ?? [],
+    sessions: src.sessions ?? [],
+  };
 }
 
 /** Remote wins for matching ids; local-only records (unsynced) are preserved. */
@@ -234,6 +283,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       plans: mergeCollection(s.plans, remote.plans),
       checkIns: mergeCollection(s.checkIns, remote.checkIns),
       meals: mergeCollection(s.meals, remote.meals),
+      subscriptions: mergeCollection(s.subscriptions, remote.subscriptions),
+      payments: mergeCollection(s.payments, remote.payments),
+      sessions: mergeCollection(s.sessions, remote.sessions),
     }));
   }, []);
 
@@ -304,6 +356,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...remote.plans,
         ...remote.checkIns,
         ...remote.meals,
+        ...remote.subscriptions,
+        ...remote.payments,
+        ...remote.sessions,
       ].map((r) => r.id));
       const s = stateRef.current;
       for (const c of s.clients) if (!remoteIds.has(c.id)) enqueue({ type: "upsert", entity: "client", record: c });
@@ -311,6 +366,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       for (const p of s.plans) if (!remoteIds.has(p.id)) enqueue({ type: "upsert", entity: "plan", record: p });
       for (const ci of s.checkIns) if (!remoteIds.has(ci.id)) enqueue({ type: "upsert", entity: "checkin", record: ci });
       for (const m of s.meals) if (!remoteIds.has(m.id)) enqueue({ type: "upsert", entity: "meal", record: m });
+      for (const sb of s.subscriptions) if (!remoteIds.has(sb.id)) enqueue({ type: "upsert", entity: "subscription", record: sb });
+      for (const py of s.payments) if (!remoteIds.has(py.id)) enqueue({ type: "upsert", entity: "payment", record: py });
+      for (const ss of s.sessions) if (!remoteIds.has(ss.id)) enqueue({ type: "upsert", entity: "session", record: ss });
 
       const nowIso = new Date().toISOString();
       persistConn(cfg, nowIso);
@@ -387,11 +445,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         plans: s.plans.filter((x) => x.clientId !== id),
         checkIns: s.checkIns.filter((x) => x.clientId !== id),
         meals: s.meals.filter((x) => x.clientId !== id),
+        subscriptions: s.subscriptions.filter((x) => x.clientId !== id),
+        payments: s.payments.filter((x) => x.clientId !== id),
+        sessions: s.sessions.filter((x) => x.clientId !== id),
       }));
       enqueue({ type: "remove", entity: "client", id });
       enqueue({ type: "removeWhere", entity: "plan", field: "clientId", value: id });
       enqueue({ type: "removeWhere", entity: "checkin", field: "clientId", value: id });
       enqueue({ type: "removeWhere", entity: "meal", field: "clientId", value: id });
+      enqueue({ type: "removeWhere", entity: "subscription", field: "clientId", value: id });
+      enqueue({ type: "removeWhere", entity: "payment", field: "clientId", value: id });
+      enqueue({ type: "removeWhere", entity: "session", field: "clientId", value: id });
       toast(`${name} and all linked data removed`, "warn");
     },
     [enqueue, state.clients, toast],
@@ -496,6 +560,221 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [enqueue, state.clients, toast],
   );
 
+  /* ================= subscriptions & payments ================= */
+
+  const addSubscription = useCallback(
+    (data: Omit<Subscription, "id" | "createdAt">): Subscription => {
+      const sub: Subscription = { ...data, id: uid(), createdAt: Date.now() };
+      setState((s) => ({ ...s, subscriptions: [...s.subscriptions, sub] }));
+      enqueue({ type: "upsert", entity: "subscription", record: sub });
+      toast(`Subscription added — ${sub.planName} until ${fmtDate(sub.endDate)}`);
+      return sub;
+    },
+    [enqueue, toast],
+  );
+
+  const updateSubscription = useCallback(
+    (sub: Subscription) => {
+      setState((s) => ({ ...s, subscriptions: s.subscriptions.map((x) => (x.id === sub.id ? sub : x)) }));
+      enqueue({ type: "upsert", entity: "subscription", record: sub });
+      toast("Subscription updated");
+    },
+    [enqueue, toast],
+  );
+
+  const renewSubscription = useCallback(
+    (prev: Subscription): Subscription => {
+      const today = todayISO();
+      // New record starts the day after the current one ends (or today if already expired).
+      const start = prev.endDate >= today ? addDays(prev.endDate, 1) : today;
+      const length = Math.max(1, diffDays(prev.startDate, prev.endDate));
+      const sub: Subscription = {
+        id: uid(),
+        clientId: prev.clientId,
+        planName: prev.planName,
+        startDate: start,
+        endDate: addDays(start, length),
+        price: prev.price,
+        paymentStatus: "Pending",
+        createdAt: Date.now(),
+      };
+      setState((s) => ({ ...s, subscriptions: [...s.subscriptions, sub] }));
+      enqueue({ type: "upsert", entity: "subscription", record: sub });
+      toast(`Renewed — new ${sub.planName} until ${fmtDate(sub.endDate)} (history kept)`);
+      return sub;
+    },
+    [enqueue, toast],
+  );
+
+  const addPayment = useCallback(
+    (data: Omit<Payment, "id">): Payment => {
+      const p: Payment = { ...data, id: uid() };
+      setState((s) => ({ ...s, payments: [...s.payments, p] }));
+      enqueue({ type: "upsert", entity: "payment", record: p });
+      toast(`Payment recorded — ${p.amount.toLocaleString("en-US")} (${p.method})`);
+      return p;
+    },
+    [enqueue, toast],
+  );
+
+  const updatePayment = useCallback(
+    (p: Payment) => {
+      setState((s) => ({ ...s, payments: s.payments.map((x) => (x.id === p.id ? p : x)) }));
+      enqueue({ type: "upsert", entity: "payment", record: p });
+      toast("Payment updated");
+    },
+    [enqueue, toast],
+  );
+
+  const deletePayment = useCallback(
+    (id: string) => {
+      setState((s) => ({ ...s, payments: s.payments.filter((x) => x.id !== id) }));
+      enqueue({ type: "remove", entity: "payment", id });
+      toast("Payment deleted", "warn");
+    },
+    [enqueue, toast],
+  );
+
+  /* ================= sessions ================= */
+
+  const addSession = useCallback(
+    (data: Omit<Session, "id">): Session => {
+      const session: Session = { ...data, id: uid() };
+      setState((s) => ({ ...s, sessions: [...s.sessions, session] }));
+      enqueue({ type: "upsert", entity: "session", record: session });
+      toast(`Session booked — ${fmtDate(session.date)} at ${session.time}`);
+      return session;
+    },
+    [enqueue, toast],
+  );
+
+  const updateSession = useCallback(
+    (session: Session) => {
+      setState((s) => ({ ...s, sessions: s.sessions.map((x) => (x.id === session.id ? session : x)) }));
+      enqueue({ type: "upsert", entity: "session", record: session });
+      toast("Session updated");
+    },
+    [enqueue, toast],
+  );
+
+  const deleteSession = useCallback(
+    (id: string) => {
+      setState((s) => ({ ...s, sessions: s.sessions.filter((x) => x.id !== id) }));
+      enqueue({ type: "remove", entity: "session", id });
+      toast("Session deleted", "warn");
+    },
+    [enqueue, toast],
+  );
+
+  const setSessionStatus = useCallback(
+    (id: string, status: SessionStatus) => {
+      setState((s) => ({
+        ...s,
+        sessions: s.sessions.map((x) => (x.id === id ? { ...x, status } : x)),
+      }));
+      const session = stateRef.current.sessions.find((x) => x.id === id);
+      if (session) enqueue({ type: "upsert", entity: "session", record: { ...session, status } });
+    },
+    [enqueue],
+  );
+
+  /* ================= check-ins (delete) ================= */
+
+  const deleteCheckIn = useCallback(
+    (id: string) => {
+      setState((s) => ({ ...s, checkIns: s.checkIns.filter((x) => x.id !== id) }));
+      enqueue({ type: "remove", entity: "checkin", id });
+      toast("Check-in deleted", "warn");
+    },
+    [enqueue, toast],
+  );
+
+  /* ================= coach notes / follow-ups / nutrition ================= */
+
+  const patchClient = useCallback(
+    (clientId: string, patch: Partial<Client>, msg?: string) => {
+      let next: Client | undefined;
+      setState((s) => ({
+        ...s,
+        clients: s.clients.map((x) => {
+          if (x.id !== clientId) return x;
+          next = { ...x, ...patch };
+          return next;
+        }),
+      }));
+      // enqueue needs the merged record — read it after the state patch is queued
+      const merged = { ...stateRef.current.clients.find((x) => x.id === clientId)!, ...patch };
+      enqueue({ type: "upsert", entity: "client", record: merged });
+      if (msg) toast(msg);
+      void next;
+    },
+    [enqueue, toast],
+  );
+
+  const addCoachNote = useCallback(
+    (clientId: string, text: string) => {
+      const note: CoachNote = { id: uid(), date: todayISO(), text };
+      const client = stateRef.current.clients.find((x) => x.id === clientId);
+      if (!client) return;
+      const merged: Client = { ...client, coachNotes: [...(client.coachNotes ?? []), note] };
+      setState((s) => ({ ...s, clients: s.clients.map((x) => (x.id === clientId ? merged : x)) }));
+      enqueue({ type: "upsert", entity: "client", record: merged });
+      toast("Coach note added");
+    },
+    [enqueue, toast],
+  );
+
+  const updateCoachNote = useCallback(
+    (clientId: string, noteId: string, text: string) => {
+      const client = stateRef.current.clients.find((x) => x.id === clientId);
+      if (!client) return;
+      const merged: Client = {
+        ...client,
+        coachNotes: (client.coachNotes ?? []).map((n) => (n.id === noteId ? { ...n, text } : n)),
+      };
+      setState((s) => ({ ...s, clients: s.clients.map((x) => (x.id === clientId ? merged : x)) }));
+      enqueue({ type: "upsert", entity: "client", record: merged });
+      toast("Coach note updated");
+    },
+    [enqueue, toast],
+  );
+
+  const deleteCoachNote = useCallback(
+    (clientId: string, noteId: string) => {
+      const client = stateRef.current.clients.find((x) => x.id === clientId);
+      if (!client) return;
+      const merged: Client = {
+        ...client,
+        coachNotes: (client.coachNotes ?? []).filter((n) => n.id !== noteId),
+      };
+      setState((s) => ({ ...s, clients: s.clients.map((x) => (x.id === clientId ? merged : x)) }));
+      enqueue({ type: "upsert", entity: "client", record: merged });
+      toast("Coach note deleted", "warn");
+    },
+    [enqueue, toast],
+  );
+
+  const setFollowUpDays = useCallback(
+    (clientId: string, days: number) => {
+      patchClient(clientId, { followUpDays: Math.max(1, days) }, `Follow-up set to every ${Math.max(1, days)} day${days === 1 ? "" : "s"}`);
+    },
+    [patchClient],
+  );
+
+  const markFollowUpDone = useCallback(
+    (clientId: string) => {
+      patchClient(clientId, { lastFollowUp: todayISO() }, "Follow-up marked as done");
+    },
+    [patchClient],
+  );
+
+  const setNutritionTargets = useCallback(
+    (clientId: string, targets: NutritionTargets) => {
+      patchClient(clientId, { nutritionTargets: targets }, "Nutrition targets saved");
+    },
+    [patchClient],
+  );
+
   const resetData = useCallback(() => {
     setState(makeSeed());
     toast("Demo data restored");
@@ -521,6 +800,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         updateMeal,
         deleteMeal,
         addCheckIn,
+        deleteCheckIn,
+        addSubscription,
+        updateSubscription,
+        renewSubscription,
+        addPayment,
+        updatePayment,
+        deletePayment,
+        addSession,
+        updateSession,
+        deleteSession,
+        setSessionStatus,
+        addCoachNote,
+        updateCoachNote,
+        deleteCoachNote,
+        setFollowUpDays,
+        markFollowUpDone,
+        setNutritionTargets,
         resetData,
         conn: stored.config,
         sync,

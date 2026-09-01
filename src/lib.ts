@@ -53,6 +53,32 @@ export const fmtKg = (n: number) => `${round1(n)}`;
 
 export const signed = (n: number) => `${n > 0 ? "+" : ""}${round1(n)}`;
 
+/** Whole days from → to (positive when `to` is in the future). */
+export const diffDays = (from: string, to: string) =>
+  Math.round((fromISO(to).getTime() - fromISO(from).getTime()) / 86_400_000);
+
+export const fmtMoney = (n: number) => n.toLocaleString("en-US");
+
+/**
+ * Normalise a phone number for wa.me — supports Egyptian local formats
+ * (01xxxxxxxxx, 201xxxxxxxxx, +201xxxxxxxxx, 00201xxxxxxxxx) as well as
+ * international numbers. Returns null when nothing usable remains.
+ */
+export function normalizePhone(raw?: string): string | null {
+  if (!raw) return null;
+  let digits = raw.replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.startsWith("00")) digits = digits.slice(2);
+  if (digits.length === 11 && digits.startsWith("0")) digits = `2${digits}`; // Egypt local → intl
+  if (digits.length < 7) return null;
+  return digits;
+}
+
+export function waHref(raw?: string): string | null {
+  const digits = normalizePhone(raw);
+  return digits ? `https://wa.me/${digits}` : null;
+}
+
 /** Read + downscale an image file to a compact JPEG data URL (safe for localStorage). */
 export function fileToDataUrl(file: File, max = 720): Promise<string> {
   return new Promise((resolve, reject) => {

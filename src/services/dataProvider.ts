@@ -1,4 +1,13 @@
-import type { CheckIn, Client, Exercise, Meal, PlanItem } from "../types";
+import type {
+  CheckIn,
+  Client,
+  Exercise,
+  Meal,
+  Payment,
+  PlanItem,
+  Session,
+  Subscription,
+} from "../types";
 
 /**
  * Abstract persistence boundary.
@@ -37,16 +46,27 @@ export interface SyncInfo {
   error: string | null;
 }
 
-/** The five collections the application actively reads and writes. */
+/** The collections the application actively reads and writes. */
 export interface RemoteData {
   clients: Client[];
   exercises: Exercise[];
   plans: PlanItem[];
   checkIns: CheckIn[];
   meals: Meal[];
+  subscriptions: Subscription[];
+  payments: Payment[];
+  sessions: Session[];
 }
 
-export type EntityName = "client" | "exercise" | "plan" | "checkin" | "meal";
+export type EntityName =
+  | "client"
+  | "exercise"
+  | "plan"
+  | "checkin"
+  | "meal"
+  | "subscription"
+  | "payment"
+  | "session";
 
 /**
  * Entity-level mutation descriptors. The provider is responsible for mapping an
@@ -58,6 +78,9 @@ export type EntityOp =
   | { type: "upsert"; entity: "plan"; record: PlanItem }
   | { type: "upsert"; entity: "checkin"; record: CheckIn }
   | { type: "upsert"; entity: "meal"; record: Meal }
+  | { type: "upsert"; entity: "subscription"; record: Subscription }
+  | { type: "upsert"; entity: "payment"; record: Payment }
+  | { type: "upsert"; entity: "session"; record: Session }
   | { type: "remove"; entity: EntityName; id: string }
   | { type: "removeWhere"; entity: EntityName; field: "clientId" | "exerciseId"; value: string };
 

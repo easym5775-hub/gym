@@ -1,5 +1,20 @@
-import type { AppState, CheckIn, Client, Exercise, Meal, MealType, PlanItem } from "./types";
-import { addDays, todayISO } from "./lib";
+import type {
+  AppState,
+  CheckIn,
+  Client,
+  Exercise,
+  Meal,
+  MealType,
+  Payment,
+  PaymentMethod,
+  PaymentStatus,
+  PlanItem,
+  Session,
+  SessionStatus,
+  SubPaymentStatus,
+  Subscription,
+} from "./types";
+import { addDays, todayISO, uid } from "./lib";
 
 let tick = 0;
 const ts = (daysAgo: number) => Date.now() - daysAgo * 86400000 - ++tick * 1000;
@@ -7,37 +22,53 @@ const ts = (daysAgo: number) => Date.now() - daysAgo * 86400000 - ++tick * 1000;
 export function makeSeed(): AppState {
   tick = 0;
   const today = todayISO();
+  const d = (n: number) => addDays(today, n);
 
   const clients: Client[] = [
     {
-      id: "c-maya", name: "Maya Rodriguez", email: "maya.r@gmail.com", phone: "+1 415 220 8841",
-      goal: "Lose weight", startDate: addDays(today, -70), status: "Active",
+      id: "c-maya", name: "Maya Rodriguez", email: "maya.r@gmail.com", phone: "+20 101 245 7836",
+      age: 29, gender: "Female", goal: "Lose weight", startDate: d(-70), status: "Active",
       notes: "Prefers evening sessions. Knee is sensitive — swap jump landings for low-impact.",
+      followUpDays: 3, lastFollowUp: d(-1),
+      coachNotes: [
+        { id: "cn-m1", date: d(-6), text: "Ask about sleep quality — mentioned stress at work." },
+        { id: "cn-m2", date: d(-2), text: "Knee felt fine on box squats. Keep tempo work." },
+      ],
+      nutritionTargets: { calories: 1750, protein: 130, carbs: 150, fats: 55, water: 2.5 },
     },
     {
-      id: "c-jamal", name: "Jamal Carter", email: "jamal.carter@outlook.com", phone: "+1 312 774 5190",
-      goal: "Build muscle", startDate: addDays(today, -42), status: "Active",
+      id: "c-jamal", name: "Jamal Carter", email: "jamal.carter@outlook.com", phone: "01098224571",
+      age: 24, gender: "Male", goal: "Build muscle", startDate: d(-42), status: "Active",
       notes: "Bulking phase +300 kcal. Push progressive overload on squat & bench every week.",
+      followUpDays: 7,
+      coachNotes: [{ id: "cn-j1", date: d(-4), text: "Deadlift form video reviewed — good. Add 2.5kg next week." }],
+      nutritionTargets: { calories: 3100, protein: 180, carbs: 360, fats: 90, water: 3 },
     },
     {
-      id: "c-priya", name: "Priya Nair", email: "priya.nair@yahoo.com", phone: "+44 7700 900312",
-      goal: "General fitness", startDate: addDays(today, -21), status: "Active",
+      id: "c-priya", name: "Priya Nair", email: "priya.nair@yahoo.com", phone: "201066123984",
+      age: 27, gender: "Female", goal: "General fitness", startDate: d(-21), status: "Active",
       notes: "New to lifting. Focus on form first, load second. Loves rowing.",
+      followUpDays: 3, lastFollowUp: d(-3),
+      nutritionTargets: { calories: 2000, protein: 110, carbs: 220, fats: 60, water: 2 },
     },
     {
       id: "c-tom", name: "Tom Becker", email: "tom.becker@gmx.de", phone: "+49 151 2903 778",
-      goal: "Lose weight", startDate: addDays(today, -84), status: "Paused",
+      age: 35, gender: "Male", goal: "Lose weight", startDate: d(-84), status: "Paused",
       notes: "Paused for a work trip until next month. Keep the plan, drop intensity on return.",
+      followUpDays: 14,
     },
     {
-      id: "c-aisha", name: "Aisha Khalid", email: "aisha.k@proton.me", phone: "+971 50 442 9810",
-      goal: "Build muscle", startDate: addDays(today, -14), status: "Active",
+      id: "c-aisha", name: "Aisha Khalid", email: "aisha.k@proton.me", phone: "01123789450",
+      age: 31, gender: "Female", goal: "Build muscle", startDate: d(-14), status: "Active",
       notes: "Home gym: dumbbells up to 20kg + bands. Program around what she has.",
+      followUpDays: 3,
+      nutritionTargets: { calories: 2300, protein: 140, carbs: 240, fats: 70, water: 2.5 },
     },
     {
       id: "c-leo", name: "Leo Martins", email: "leo.martins@gmail.com", phone: "+351 912 445 201",
-      goal: "General fitness", startDate: addDays(today, -140), status: "Completed",
+      age: 40, gender: "Male", goal: "General fitness", startDate: d(-140), status: "Completed",
       notes: "Finished the 12-week block. Check back in 6 weeks for maintenance program.",
+      followUpDays: 14,
     },
   ];
 
@@ -66,7 +97,6 @@ export function makeSeed(): AppState {
   });
 
   const plans: PlanItem[] = [
-    // Maya — Day 1 (lower) / 2 (push) / 3 (pull) / 4 (cardio+core) / 5 (full body) / 6 light
     pi("c-maya", 1, "e-squat", 4, 8, 90, "Tempo 3-1-1. Stop 2 reps shy of failure."),
     pi("c-maya", 1, "e-rdl", 3, 10, 75),
     pi("c-maya", 1, "e-lunge", 3, 12, 60, "Bodyweight or light DBs."),
@@ -81,7 +111,6 @@ export function makeSeed(): AppState {
     pi("c-maya", 5, "e-row", 3, 10, 75),
     pi("c-maya", 6, "e-rower", 1, 1, 0, "Steady 30 min, conversational pace."),
     pi("c-maya", 6, "e-plank", 3, 1, 45),
-    // Jamal — push / pull / legs / upper / arms
     pi("c-jamal", 1, "e-bench", 5, 5, 120, "Add 2.5kg when all sets land."),
     pi("c-jamal", 1, "e-pushup", 3, 15, 60, "Weighted if 15 feels easy."),
     pi("c-jamal", 1, "e-pushdown", 3, 12, 60),
@@ -96,7 +125,6 @@ export function makeSeed(): AppState {
     pi("c-jamal", 5, "e-curl", 4, 10, 60),
     pi("c-jamal", 5, "e-pushdown", 4, 12, 60),
     pi("c-jamal", 5, "e-legraise", 3, 12, 60),
-    // Priya — 3 full-body days + cardio
     pi("c-priya", 1, "e-squat", 3, 8, 90, "Goblet squat until barbell feels easy."),
     pi("c-priya", 1, "e-pushup", 3, 8, 75, "Incline push-ups if needed."),
     pi("c-priya", 1, "e-row", 3, 10, 75),
@@ -128,7 +156,7 @@ export function makeSeed(): AppState {
   ];
 
   const ci = (clientId: string, daysAgo: number, weight: number, waist: number | undefined, mood: number, water: number, workoutDone: boolean, notes?: string): CheckIn => ({
-    id: `ci-${clientId}-${daysAgo}-${tick}`, clientId, date: addDays(today, -daysAgo), ts: ts(daysAgo),
+    id: `ci-${clientId}-${daysAgo}-${tick}`, clientId, date: d(-daysAgo), ts: ts(daysAgo),
     weight, waist, mood, water, workoutDone, notes,
   });
 
@@ -154,5 +182,125 @@ export function makeSeed(): AppState {
     ci("c-aisha", 5, 58.9, 64.5, 3, 2.0, true, "Band pull-ups getting smoother."),
   ];
 
-  return { clients, exercises, plans, checkIns, meals };
+  /* ---------- subscriptions (current + preserved history) ---------- */
+
+  const sub = (
+    clientId: string,
+    planName: string,
+    startIn: number,
+    endIn: number,
+    price: number,
+    paymentStatus: SubPaymentStatus,
+  ): Subscription => ({
+    id: `sub-${clientId}-${startIn}-${endIn}`,
+    clientId,
+    planName,
+    startDate: d(startIn),
+    endDate: d(endIn),
+    price,
+    paymentStatus,
+    createdAt: ts(-startIn),
+  });
+
+  const subscriptions: Subscription[] = [
+    // Maya — history, then current (Active)
+    sub("c-maya", "1 Month", -70, -40, 1200, "Paid"),
+    sub("c-maya", "1 Month", -40, -10, 1200, "Paid"),
+    sub("c-maya", "1 Month", -10, 20, 1300, "Paid"),
+    // Jamal — history, then current (Active, paid)
+    sub("c-jamal", "1 Month", -42, -12, 1200, "Paid"),
+    sub("c-jamal", "3 Months", -12, 78, 3000, "Paid"),
+    // Priya — current expires in 5 days (Expiring Soon, pending payment)
+    sub("c-priya", "1 Month", -21, 5, 1200, "Pending"),
+    // Tom — expired while paused
+    sub("c-tom", "6 Weeks", -56, -14, 1600, "Paid"),
+    // Aisha — current partially paid
+    sub("c-aisha", "1 Month", -14, 16, 1200, "Partial"),
+    // Leo — completed block
+    sub("c-leo", "3 Months", -98, -8, 3000, "Paid"),
+  ];
+
+  /* ---------- payments (linked to subscriptions) ---------- */
+
+  const pay = (
+    clientId: string,
+    subscriptionId: string | undefined,
+    amount: number,
+    dateIn: number,
+    method: PaymentMethod,
+    status: PaymentStatus,
+    notes = "",
+  ): Payment => ({
+    id: `pay-${clientId}-${dateIn}-${tick}`,
+    clientId,
+    subscriptionId,
+    amount,
+    date: d(dateIn),
+    method,
+    status,
+    notes,
+  });
+
+  const payments: Payment[] = [
+    pay("c-maya", "sub-c-maya--70--40", 1200, -70, "Cash", "Paid"),
+    pay("c-maya", "sub-c-maya--40--10", 1200, -40, "Bank Transfer", "Paid"),
+    pay("c-maya", "sub-c-maya--10-20", 1300, -10, "Card", "Paid"),
+    pay("c-jamal", "sub-c-jamal--42--12", 1200, -42, "Cash", "Paid"),
+    pay("c-jamal", "sub-c-jamal--12-78", 3000, -12, "Bank Transfer", "Paid"),
+    pay("c-priya", "sub-c-priya--21-5", 600, -21, "Cash", "Paid", "Half up front"),
+    pay("c-tom", "sub-c-tom--56--14", 1600, -56, "Card", "Paid"),
+    pay("c-aisha", "sub-c-aisha--14-16", 600, -14, "Cash", "Paid", "First half"),
+    pay("c-leo", "sub-c-leo--98--8", 3000, -98, "Bank Transfer", "Paid"),
+  ];
+
+  /* ---------- sessions (mixed statuses incl. today) ---------- */
+
+  const ses = (
+    clientId: string,
+    dateIn: number,
+    time: string,
+    type: string,
+    status: SessionStatus,
+    notes = "",
+  ): Session => ({
+    id: `ses-${clientId}-${dateIn}-${time}`,
+    clientId,
+    date: d(dateIn),
+    time,
+    type,
+    status,
+    notes,
+  });
+
+  const sessions: Session[] = [
+    // Maya — history + today + upcoming
+    ses("c-maya", -6, "18:00", "Strength", "Completed"),
+    ses("c-maya", -4, "18:00", "Strength", "Missed", "Client cancelled last minute"),
+    ses("c-maya", -2, "18:00", "Cardio", "Completed"),
+    ses("c-maya", 0, "18:00", "Strength", "Confirmed", "Lower body focus"),
+    ses("c-maya", 2, "18:00", "Strength", "Scheduled"),
+    ses("c-maya", 4, "18:00", "Cardio", "Scheduled"),
+    // Jamal
+    ses("c-jamal", -5, "07:30", "Strength", "Completed"),
+    ses("c-jamal", -3, "07:30", "Strength", "Completed"),
+    ses("c-jamal", -1, "07:30", "Strength", "Completed", "Deadlift PR day"),
+    ses("c-jamal", 0, "07:30", "Strength", "Scheduled", "Squat day"),
+    ses("c-jamal", 2, "07:30", "Strength", "Scheduled"),
+    // Priya
+    ses("c-priya", -3, "19:30", "Strength", "Completed"),
+    ses("c-priya", -1, "19:30", "Cardio", "Cancelled", "Client travelling"),
+    ses("c-priya", 1, "19:30", "Strength", "Scheduled"),
+    // Aisha
+    ses("c-aisha", -2, "20:00", "Strength", "Completed"),
+    ses("c-aisha", 0, "20:00", "Strength", "Confirmed"),
+    ses("c-aisha", 3, "20:00", "Strength", "Scheduled"),
+    // Tom — paused, last one cancelled
+    ses("c-tom", -13, "09:00", "Strength", "Cancelled", "Trip started"),
+    // Leo — completed history
+    ses("c-leo", -10, "08:00", "Assessment", "Completed", "Final block assessment"),
+  ];
+
+  return { clients, exercises, plans, checkIns, meals, subscriptions, payments, sessions };
 }
+
+export { uid };

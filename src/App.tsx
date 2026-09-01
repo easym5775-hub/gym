@@ -7,11 +7,12 @@ import { CoachShell } from "./components/Sidebar";
 import { Dashboard } from "./components/Dashboard";
 import { ClientsView } from "./components/Clients";
 import { PlansView } from "./components/Schedule";
-import { MealsView } from "./components/Payments";
+import { MealsView } from "./components/Meals";
 import { LibraryView } from "./components/Library";
 import { CheckInsView } from "./components/ClientDetails";
 import { SettingsView } from "./components/SettingsView";
 import { ClientApp } from "./components/ClientApp";
+import { ClientProfile } from "./components/ClientProfile";
 
 type Session = { role: "coach" } | { role: "client"; clientId: string } | null;
 
@@ -20,10 +21,12 @@ function Root() {
   const [view, setView] = useState<CoachView>("dashboard");
   const [planPreset, setPlanPreset] = useState<string | null>(null);
   const [mealPreset, setMealPreset] = useState<string | null>(null);
+  const [clientPreset, setClientPreset] = useState<string | null>(null);
 
   const go = (v: CoachView, id?: string) => {
     if (v === "plans") setPlanPreset(id ?? null);
     if (v === "meals") setMealPreset(id ?? null);
+    if (v === "client") setClientPreset(id ?? null);
     setView(v);
   };
 
@@ -50,6 +53,7 @@ function Root() {
       <CoachShell view={view} setView={setView} onLogout={() => setSession(null)}>
         {view === "dashboard" && <Dashboard go={go} />}
         {view === "clients" && <ClientsView go={go} />}
+        {view === "client" && clientPreset && <ClientProfile clientId={clientPreset} go={go} />}
         {view === "plans" && <PlansView presetClientId={planPreset} />}
         {view === "meals" && <MealsView presetClientId={mealPreset} />}
         {view === "library" && <LibraryView />}

@@ -1,6 +1,34 @@
 import { useEffect, useState, type ChangeEvent } from "react";
-import type { Client, Exercise, Goal, ClientStatus, ExerciseCategory, Meal, MealType, PlanItem } from "../types";
-import { CATEGORIES, GOALS, MEAL_TYPES, STATUSES, WEEK_DAYS } from "../types";
+import type {
+  Client,
+  Exercise,
+  Goal,
+  ClientStatus,
+  ExerciseCategory,
+  Meal,
+  MealType,
+  NutritionTargets,
+  Payment,
+  PaymentMethod,
+  PaymentStatus,
+  PlanItem,
+  Session,
+  SessionStatus,
+  SubPaymentStatus,
+  Subscription,
+} from "../types";
+import {
+  CATEGORIES,
+  GOALS,
+  MEAL_TYPES,
+  PAYMENT_METHODS,
+  PAYMENT_STATUSES,
+  SESSION_STATUSES,
+  SESSION_TYPES,
+  STATUSES,
+  SUB_PAYMENT_STATUSES,
+  WEEK_DAYS,
+} from "../types";
 import { fileToDataUrl, todayISO } from "../lib";
 import { useApp } from "../store";
 import { Avatar, Modal, btnGhost, btnVolt, inputCls, labelCls } from "./ui";
@@ -75,6 +103,8 @@ export function ClientFormModal({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [age, setAge] = useState("");
+  const [gender, setGender] = useState<Client["gender"]>(undefined);
   const [goal, setGoal] = useState<Goal>("Lose weight");
   const [status, setStatus] = useState<ClientStatus>("Active");
   const [startDate, setStartDate] = useState(todayISO());
@@ -87,6 +117,8 @@ export function ClientFormModal({
     setName(initial?.name ?? "");
     setEmail(initial?.email ?? "");
     setPhone(initial?.phone ?? "");
+    setAge(initial?.age !== undefined ? String(initial.age) : "");
+    setGender(initial?.gender);
     setGoal(initial?.goal ?? "Lose weight");
     setStatus(initial?.status ?? "Active");
     setStartDate(initial?.startDate ?? todayISO());
@@ -100,7 +132,18 @@ export function ClientFormModal({
       setError("Client name is required.");
       return;
     }
-    const data = { name: name.trim(), email: email.trim(), phone: phone.trim(), goal, status, startDate, notes: notes.trim(), photo };
+    const data = {
+      name: name.trim(),
+      email: email.trim(),
+      phone: phone.trim(),
+      age: age.trim() === "" ? undefined : Math.max(0, Number(age) || 0),
+      gender,
+      goal,
+      status,
+      startDate,
+      notes: notes.trim(),
+      photo,
+    };
     if (initial) {
       updateClient({ ...initial, ...data });
     } else {
@@ -124,7 +167,26 @@ export function ClientFormModal({
         </div>
         <div>
           <label className={labelCls}>Phone</label>
-          <input className={inputCls} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 555 000 1234" />
+          <input className={inputCls} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+20 101 234 5678" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Age</label>
+            <input className={inputCls} type="number" min={0} value={age} onChange={(e) => setAge(e.target.value)} placeholder="—" />
+          </div>
+          <div>
+            <label className={labelCls}>Gender</label>
+            <select
+              className={inputCls}
+              value={gender ?? ""}
+              onChange={(e) => setGender((e.target.value || undefined) as Client["gender"])}
+            >
+              <option value="">—</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
         </div>
         <div>
           <label className={labelCls}>Goal</label>
@@ -469,5 +531,368 @@ export function PhotoModal({ src, onClose }: { src: string | null; onClose: () =
         </button>
       </div>
     </div>
+  );
+}
+
+/* ---------- subscription form (add / edit) ---------- */
+
+export function SubscriptionFormModal({
+  open,
+  clientId,
+  initial,
+  onClose,
+}: {
+  open: boolean;
+  clientId: string;
+  initial: Subscription | null;
+  onClose: () => void;
+}) {
+  const { addSubscription, updateSubscription } = useApp();
+  const [planName, setPlanName] = useState("1 Month");
+  const [startDate, setStartDate] = useState(todayISO());
+  const [endDate, setEndDate] = useState(todayISO());
+  const [price, setPrice] = useState("1200");
+  const [paymentStatus, setPaymentStatus] = useState<SubPaymentStatus>("Pending");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setPlanName(initial?.planName ?? "1 Month");
+    setStartDate(initial?.startDate ?? todayISO());
+    setEndDate(initial?.endDate ?? todayISO());
+    setPrice(String(initial?.price ?? 1200));
+    setPaymentStatus(initial?.paymentStatus ?? "Pending");
+    setError("");
+  }, [open, initial]);
+
+  const save = () => {
+    if (!planName.trim()) return setError("Plan name is required.");
+    if (!startDate || !endDate) return setError("Both dates are required.");
+    if (endDate < startDate) return setError("End date must be after the start date.");
+    const data = {
+      clientId,
+      planName: planName.trim(),
+      startDate,
+      endDate,
+      price: Math.max(0, Number(price) || 0),
+      paymentStatus,
+    };
+    if (initial) updateSubscription({ ...initial, ...data });
+    else addSubscription(data);
+    onClose();
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title={initial ? "Edit subscription" : "Add subscription"}>
+      <div className="grid gap-4">
+        <div>
+          <label className={labelCls}>Plan name</label>
+          <input className={inputCls} value={planName} onChange={(e) => setPlanName(e.target.value)} placeholder="1 Month / 3 Months / 12 Sessions" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Start date</label>
+            <input className={inputCls} type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>End date</label>
+            <input className={inputCls} type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Price</label>
+            <input className={inputCls} type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>Payment status</label>
+            <select className={inputCls} value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value as SubPaymentStatus)}>
+              {SUB_PAYMENT_STATUSES.map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+      {error && <p className="mt-3 text-xs font-bold text-danger-400">{error}</p>}
+      <div className="mt-5 flex gap-2">
+        <button className={`${btnVolt} flex-1`} onClick={save}>
+          {initial ? "Save changes" : "Add subscription"}
+        </button>
+        <button className={btnGhost} onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/* ---------- payment form ---------- */
+
+export function PaymentFormModal({
+  open,
+  clientId,
+  subscriptions,
+  defaultSubscriptionId,
+  initial,
+  onClose,
+}: {
+  open: boolean;
+  clientId: string;
+  subscriptions: Subscription[];
+  defaultSubscriptionId?: string;
+  initial: Payment | null;
+  onClose: () => void;
+}) {
+  const { addPayment, updatePayment } = useApp();
+  const [amount, setAmount] = useState("1200");
+  const [date, setDate] = useState(todayISO());
+  const [method, setMethod] = useState<PaymentMethod>("Cash");
+  const [status, setStatus] = useState<PaymentStatus>("Paid");
+  const [subscriptionId, setSubscriptionId] = useState<string>("");
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setAmount(String(initial?.amount ?? 1200));
+    setDate(initial?.date ?? todayISO());
+    setMethod(initial?.method ?? "Cash");
+    setStatus(initial?.status ?? "Paid");
+    setSubscriptionId(initial?.subscriptionId ?? defaultSubscriptionId ?? subscriptions[0]?.id ?? "");
+    setNotes(initial?.notes ?? "");
+    setError("");
+  }, [open, initial, defaultSubscriptionId, subscriptions]);
+
+  const save = () => {
+    const amt = Number(amount);
+    if (!amount || Number.isNaN(amt) || amt <= 0) return setError("Enter a valid amount.");
+    const data = {
+      clientId,
+      amount: amt,
+      date,
+      method,
+      status,
+      subscriptionId: subscriptionId || undefined,
+      notes: notes.trim(),
+    };
+    if (initial) updatePayment({ ...initial, ...data });
+    else addPayment(data);
+    onClose();
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title={initial ? "Edit payment" : "Record payment"}>
+      <div className="grid gap-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Amount *</label>
+            <input className={inputCls} type="number" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>Payment date</label>
+            <input className={inputCls} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Method</label>
+            <select className={inputCls} value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
+              {PAYMENT_METHODS.map((m) => (
+                <option key={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Status</label>
+            <select className={inputCls} value={status} onChange={(e) => setStatus(e.target.value as PaymentStatus)}>
+              {PAYMENT_STATUSES.map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className={labelCls}>Related subscription</label>
+          <select className={inputCls} value={subscriptionId} onChange={(e) => setSubscriptionId(e.target.value)}>
+            <option value="">— none —</option>
+            {subscriptions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.planName} · {s.startDate} → {s.endDate}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>Notes</label>
+          <input className={inputCls} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" />
+        </div>
+      </div>
+      {error && <p className="mt-3 text-xs font-bold text-danger-400">{error}</p>}
+      <div className="mt-5 flex gap-2">
+        <button className={`${btnVolt} flex-1`} onClick={save}>
+          {initial ? "Save changes" : "Record payment"}
+        </button>
+        <button className={btnGhost} onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/* ---------- session form ---------- */
+
+export function SessionFormModal({
+  open,
+  clientId,
+  initial,
+  onClose,
+}: {
+  open: boolean;
+  clientId: string;
+  initial: Session | null;
+  onClose: () => void;
+}) {
+  const { addSession, updateSession } = useApp();
+  const [date, setDate] = useState(todayISO());
+  const [time, setTime] = useState("18:00");
+  const [type, setType] = useState(SESSION_TYPES[0]);
+  const [status, setStatus] = useState<SessionStatus>("Scheduled");
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setDate(initial?.date ?? todayISO());
+    setTime(initial?.time ?? "18:00");
+    setType(initial?.type ?? SESSION_TYPES[0]);
+    setStatus(initial?.status ?? "Scheduled");
+    setNotes(initial?.notes ?? "");
+    setError("");
+  }, [open, initial]);
+
+  const save = () => {
+    if (!date || !time) return setError("Date and time are required.");
+    const data = { clientId, date, time, type, status, notes: notes.trim() };
+    if (initial) updateSession({ ...initial, ...data });
+    else addSession(data);
+    onClose();
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title={initial ? "Edit session" : "Book session"}>
+      <div className="grid gap-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Date</label>
+            <input className={inputCls} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          <div>
+            <label className={labelCls}>Time</label>
+            <input className={inputCls} type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Type</label>
+            <select className={inputCls} value={type} onChange={(e) => setType(e.target.value)}>
+              {SESSION_TYPES.map((t) => (
+                <option key={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Status</label>
+            <select className={inputCls} value={status} onChange={(e) => setStatus(e.target.value as SessionStatus)}>
+              {SESSION_STATUSES.map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className={labelCls}>Notes</label>
+          <input className={inputCls} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Focus, cues, equipment…" />
+        </div>
+      </div>
+      {error && <p className="mt-3 text-xs font-bold text-danger-400">{error}</p>}
+      <div className="mt-5 flex gap-2">
+        <button className={`${btnVolt} flex-1`} onClick={save}>
+          {initial ? "Save changes" : "Book session"}
+        </button>
+        <button className={btnGhost} onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/* ---------- nutrition targets form ---------- */
+
+export function NutritionTargetsModal({
+  open,
+  clientId,
+  initial,
+  onClose,
+}: {
+  open: boolean;
+  clientId: string;
+  initial?: NutritionTargets;
+  onClose: () => void;
+}) {
+  const { setNutritionTargets } = useApp();
+  const [calories, setCalories] = useState("2000");
+  const [protein, setProtein] = useState("120");
+  const [carbs, setCarbs] = useState("200");
+  const [fats, setFats] = useState("60");
+  const [water, setWater] = useState("2.5");
+
+  useEffect(() => {
+    if (!open) return;
+    setCalories(String(initial?.calories ?? 2000));
+    setProtein(String(initial?.protein ?? 120));
+    setCarbs(String(initial?.carbs ?? 200));
+    setFats(String(initial?.fats ?? 60));
+    setWater(String(initial?.water ?? 2.5));
+  }, [open, initial]);
+
+  const save = () => {
+    setNutritionTargets(clientId, {
+      calories: Math.max(0, Number(calories) || 0),
+      protein: Math.max(0, Number(protein) || 0),
+      carbs: Math.max(0, Number(carbs) || 0),
+      fats: Math.max(0, Number(fats) || 0),
+      water: Math.max(0, Number(water) || 0),
+    });
+    onClose();
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="Nutrition targets">
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          { l: "Calories (kcal)", v: calories, s: setCalories },
+          { l: "Protein (g)", v: protein, s: setProtein },
+          { l: "Carbs (g)", v: carbs, s: setCarbs },
+          { l: "Fats (g)", v: fats, s: setFats },
+          { l: "Water (L)", v: water, s: setWater },
+        ].map((f) => (
+          <div key={f.l} className={f.l.startsWith("Water") ? "col-span-2" : ""}>
+            <label className={labelCls}>{f.l}</label>
+            <input className={inputCls} type="number" min={0} step="0.1" value={f.v} onChange={(e) => f.s(e.target.value)} />
+          </div>
+        ))}
+      </div>
+      <div className="mt-5 flex gap-2">
+        <button className={`${btnVolt} flex-1`} onClick={save}>
+          Save targets
+        </button>
+        <button className={btnGhost} onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </Modal>
   );
 }
