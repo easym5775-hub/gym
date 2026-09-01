@@ -19,7 +19,6 @@ const fmtSync = (iso: string | null) =>
 const DRAFT_KEY = "forge-oauth-draft-v1";
 
 interface Draft {
-  clientId: string;
   coachId: string;
   mode: "new" | "existing";
   sheetUrl: string;
@@ -31,7 +30,6 @@ function loadDraft(): Draft {
     if (raw) {
       const d = JSON.parse(raw) as Partial<Draft>;
       return {
-        clientId: d.clientId ?? "",
         coachId: d.coachId ?? "coach-dana",
         mode: d.mode === "existing" ? "existing" : "new",
         sheetUrl: d.sheetUrl ?? "",
@@ -40,7 +38,7 @@ function loadDraft(): Draft {
   } catch {
     /* ignore */
   }
-  return { clientId: "", coachId: "coach-dana", mode: "new", sheetUrl: "" };
+  return { coachId: "coach-dana", mode: "new", sheetUrl: "" };
 }
 
 function GoogleG({ className = "h-5 w-5" }: { className?: string }) {
@@ -87,10 +85,6 @@ export function SettingsView() {
         : "bg-volt-400";
 
   const validate = (): string => {
-    if (!draft.clientId.trim())
-      return "Enter your Google OAuth Client ID first (one-time setup — see “How it works” below).";
-    if (!/\.apps\.googleusercontent\.com$/.test(draft.clientId.trim()))
-      return "That doesn't look like an OAuth Client ID (it ends in .apps.googleusercontent.com).";
     if (!draft.coachId.trim()) return "Enter a Coach ID — it isolates your data from other coaches.";
     if (draft.mode === "existing" && !draft.sheetUrl.trim())
       return "Paste the Google Sheet URL, or switch to “Create a new sheet”.";
@@ -107,7 +101,7 @@ export function SettingsView() {
     setBusy("link");
     try {
       await linkGoogle({
-        clientId: draft.clientId.trim(),
+        // Client ID is built into the app — nothing to paste or configure.
         coachId: draft.coachId.trim(),
         createNew: draft.mode === "new",
         sheetUrl: draft.sheetUrl,
@@ -249,20 +243,20 @@ export function SettingsView() {
             </div>
           ) : (
             <div className="mt-4 grid gap-4">
-              {/* The one-time prerequisite */}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className={labelCls}>Google OAuth Client ID *</label>
+                  <label className={labelCls}>Coach ID *</label>
                   <input
                     className={inputCls}
-                    placeholder="….apps.googleusercontent.com"
-                    value={draft.clientId}
-                    onChange={(e) => set({ clientId: e.target.value })}
+                    value={draft.coachId}
+                    onChange={(e) => set({ coachId: e.target.value })}
                   />
+                  <p className="mt-1 text-[11px] text-mist-500">Keeps your data separate from other coaches.</p>
                 </div>
-                <div>
-                  <label className={labelCls}>Coach ID *</label>
-                  <input className={inputCls} value={draft.coachId} onChange={(e) => set({ coachId: e.target.value })} />
+                <div className="flex flex-col justify-end">
+                  <p className="rounded-lg border border-moss-600/30 bg-moss-600/10 px-3 py-2 text-[11px] leading-4 text-moss-300">
+                    No API keys or Client IDs to set up — Google sign-in is built in. Just press the button below.
+                  </p>
                 </div>
               </div>
 
@@ -353,25 +347,28 @@ export function SettingsView() {
           <div className="animate-fade grid gap-4 lg:grid-cols-2">
             <ol className="list-decimal space-y-1.5 pl-5 text-sm leading-6 text-mist-300">
               <li>
-                In <strong className="text-mist-100">Google Cloud Console</strong>, create a project, enable the{" "}
-                <strong className="text-mist-100">Google Sheets API</strong>, then create an{" "}
-                <strong className="text-mist-100">OAuth client ID</strong> (type: Web application).
+                Pick a <strong className="text-mist-100">Coach ID</strong> and choose whether to create a new sheet or use
+                one you already own.
               </li>
               <li>
-                Add this site's address to the client's <strong className="text-mist-100">Authorised JavaScript origins</strong>.
+                Press <strong className="text-mist-100">Link with Google</strong>. A Google window opens — sign in and
+                approve access to your spreadsheets. That's the whole setup; no keys, no IDs to paste.
               </li>
-              <li>Copy the Client ID into the field above, pick a Coach ID, then press{" "}
-                <strong className="text-mist-100">Link with Google</strong> and approve the consent screen.</li>
               <li>
                 The 16 database tabs are created automatically (existing data is never touched) and your data syncs both
                 ways from then on.
+              </li>
+              <li>
+                To undo access at any time: <span className="text-mist-100">Google → Security → Third-party access</span>{" "}
+                and remove FORGE.
               </li>
             </ol>
             <div className="rounded-lg border border-night-700 bg-night-800 p-4 text-xs leading-5 text-mist-400">
               <p className="font-bold text-mist-200">Security</p>
               <p className="mt-1.5">
-                No API key, service-account key or OAuth secret ever lives in this app. A Client ID is public by design;
-                the access token is short-lived, scoped to your spreadsheets, granted by you, and revocable from{" "}
+                The OAuth Client ID is built into the app and is public by design — it only identifies FORGE, it is not a
+                secret. No API key or service-account key ever lives here. The real credential is a short-lived access
+                token that only exists after you explicitly approve it, scoped to your spreadsheets, and revocable from{" "}
                 <span className="text-mist-200">Google → Security → Third-party access</span>.
               </p>
               <p className="mt-2">

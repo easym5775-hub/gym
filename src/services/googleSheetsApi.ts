@@ -76,7 +76,7 @@ export async function getMetadata(cfg: ConnectionConfig): Promise<{ title: strin
 }
 
 export async function createSpreadsheet(
-  clientId: string,
+  clientId: string | undefined,
   title: string,
 ): Promise<{ spreadsheetId: string; spreadsheetUrl: string }> {
   const token = await getValidToken(clientId);

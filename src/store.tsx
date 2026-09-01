@@ -62,8 +62,9 @@ interface Store {
   lastSync: string | null;
   /** OAuth "Link with Google" flow — consent, (optionally) create a sheet, init, load. */
   linkGoogle: (opts: {
-    clientId: string;
     coachId: string;
+    /** Optional override — the app ships with a built-in OAuth client id. */
+    clientId?: string;
     /** When true a brand-new spreadsheet is created; otherwise `sheetUrl` is used. */
     createNew?: boolean;
     sheetUrl?: string;
@@ -262,7 +263,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   /* ---- public connection actions ---- */
 
   const linkGoogle = useCallback(
-    async (opts: { clientId: string; coachId: string; createNew?: boolean; sheetUrl?: string }) => {
+    async (opts: { coachId: string; clientId?: string; createNew?: boolean; sheetUrl?: string }) => {
       markSync({ status: "syncing", error: null });
 
       // 1. Explicit OAuth consent — the "Link with Google" moment.

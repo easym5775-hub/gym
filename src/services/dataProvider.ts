@@ -13,11 +13,12 @@ export type SyncStatus = "local" | "idle" | "syncing" | "error";
 
 export interface ConnectionConfig {
   /**
-   * Google OAuth 2.0 Client ID (web application). Public by design — it is NOT
-   * a secret. The access token it yields is short-lived, scoped to the coach's
-   * spreadsheets and granted through Google's consent screen.
+   * Google OAuth 2.0 Client ID. Optional — the app ships with a built-in client
+   * id, so the coach never has to supply one. A client id is public by design
+   * (it identifies the application, it is NOT a secret); the real credential is
+   * the short-lived access token granted via Google's consent screen.
    */
-  clientId: string;
+  clientId?: string;
   /** The spreadsheet that acts as the database. */
   spreadsheetId: string;
   /** Full spreadsheet URL (used for "Open Google Sheet"). */

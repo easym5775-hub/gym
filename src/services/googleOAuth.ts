@@ -16,6 +16,24 @@ const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 /** Refresh a little early so a call never fires with a token about to die. */
 const EXPIRY_BUFFER_MS = 60_000;
 
+/**
+ * The OAuth Client ID is baked into the app, so the coach never has to paste or
+ * configure one. An OAuth *client id* is public by design (it identifies the
+ * application, it is NOT a secret) — the actual credential is the short-lived
+ * access token, which only exists after the coach explicitly consents through
+ * Google's sign-in screen and can be revoked from their Google account at any
+ * time.
+ *
+ * A project can override this once (e.g. with its own registered client id) via
+ * the optional `VITE_GOOGLE_CLIENT_ID` env var without touching any code.
+ */
+const DEFAULT_CLIENT_ID = "764086051850-6qr4p6gpi6hn506pt8ejuq83di341hur.apps.googleusercontent.com";
+
+/** Returns the client id to use: the embedded default, or an explicit override. */
+function resolveClientId(clientId?: string): string {
+  return clientId && clientId.trim() ? clientId.trim() : DEFAULT_CLIENT_ID;
+}
+
 interface TokenClientConfig {
   client_id: string;
   scope: string;
@@ -113,21 +131,23 @@ function requestToken(clientId: string, prompt: string): Promise<{ token: string
  * Explicit user action — the "Link with Google" button. Forces the consent
  * screen so the coach clearly sees the spreadsheet permission being granted.
  */
-export async function linkWithGoogle(clientId: string): Promise<void> {
-  const t = await requestToken(clientId, "consent");
-  cached = { clientId, token: t.token, expiresAt: t.expiresAt };
+export async function linkWithGoogle(clientId?: string): Promise<void> {
+  const id = resolveClientId(clientId);
+  const t = await requestToken(id, "consent");
+  cached = { clientId: id, token: t.token, expiresAt: t.expiresAt };
 }
 
 /**
  * Returns a valid access token, refreshing silently when the cached one has
  * expired. With an active Google session + prior consent this shows no UI.
  */
-export async function getValidToken(clientId: string, force = false): Promise<string> {
-  if (!force && cached && cached.clientId === clientId && Date.now() < cached.expiresAt) {
+export async function getValidToken(clientId?: string, force = false): Promise<string> {
+  const id = resolveClientId(clientId);
+  if (!force && cached && cached.clientId === id && Date.now() < cached.expiresAt) {
     return cached.token;
   }
-  const t = await requestToken(clientId, "");
-  cached = { clientId, token: t.token, expiresAt: t.expiresAt };
+  const t = await requestToken(id, "");
+  cached = { clientId: id, token: t.token, expiresAt: t.expiresAt };
   return t.token;
 }
 
