@@ -1,30 +1,49 @@
 @import "tailwindcss";
 
+:root {
+  color-scheme: dark;
+}
+
 @theme {
-  --font-sans: "IBM Plex Sans Arabic", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Changa", "IBM Plex Sans Arabic", sans-serif;
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Barlow Condensed", "Manrope", sans-serif;
 
-  --color-pine-50: #eef5f0;
-  --color-pine-100: #dcebe1;
-  --color-pine-200: #bfd9c9;
-  --color-pine-300: #96bfa6;
-  --color-pine-400: #67a07f;
-  --color-pine-500: #3f8360;
-  --color-pine-600: #256b4b;
-  --color-pine-700: #17573b;
-  --color-pine-800: #10452e;
-  --color-pine-900: #0c3624;
-  --color-pine-950: #07251a;
+  --color-night-400: #4a6154;
+  --color-night-500: #31443a;
+  --color-night-600: #24322a;
+  --color-night-700: #1a251d;
+  --color-night-800: #131b15;
+  --color-night-850: #0f1611;
+  --color-night-900: #0b100d;
+  --color-night-950: #080c0a;
 
-  --color-volt-100: #f6fdcf;
-  --color-volt-200: #eefaa9;
-  --color-volt-300: #e4f97a;
-  --color-volt-400: #d8f24b;
-  --color-volt-500: #c3e22a;
-  --color-volt-600: #a3c316;
+  --color-mist-100: #e4ede6;
+  --color-mist-200: #cbd8ce;
+  --color-mist-300: #aebfb3;
+  --color-mist-400: #93a89a;
+  --color-mist-500: #7c9486;
 
-  --color-sage: #f1f4ec;
-  --color-ink: #1a2620;
+  --color-volt-200: #eafba0;
+  --color-volt-300: #dcf770;
+  --color-volt-400: #cdf14b;
+  --color-volt-500: #b9e32c;
+  --color-volt-600: #97be1b;
+  --color-volt-700: #74951a;
+
+  --color-moss-300: #8fd6ac;
+  --color-moss-400: #63bd8c;
+  --color-moss-500: #41a371;
+  --color-moss-600: #2f855b;
+  --color-moss-700: #276b4b;
+  --color-moss-900: #12291d;
+
+  --color-warn-300: #f6d18a;
+  --color-warn-400: #f2c063;
+  --color-warn-500: #e8a93f;
+
+  --color-danger-300: #f8a89e;
+  --color-danger-400: #f58a7e;
+  --color-danger-500: #ef6b5e;
 }
 
 html {
@@ -32,14 +51,14 @@ html {
 }
 
 body {
-  background-color: var(--color-sage);
-  color: var(--color-ink);
+  background-color: var(--color-night-950);
+  color: var(--color-mist-100);
   -webkit-font-smoothing: antialiased;
 }
 
 ::selection {
-  background: var(--color-volt-300);
-  color: var(--color-pine-950);
+  background: var(--color-volt-400);
+  color: var(--color-night-950);
 }
 
 *::-webkit-scrollbar {
@@ -50,12 +69,11 @@ body {
   background: transparent;
 }
 *::-webkit-scrollbar-thumb {
-  background: var(--color-pine-200);
+  background: var(--color-night-600);
   border-radius: 8px;
-  border: 2px solid var(--color-sage);
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: var(--color-pine-300);
+  background: var(--color-night-500);
 }
 
 input[type="number"]::-webkit-outer-spin-button,
@@ -68,21 +86,32 @@ input[type="number"] {
   appearance: textfield;
 }
 
-/* ---------- motion ---------- */
+/* ---------- ambient layers ---------- */
 
-@keyframes view-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.app-glow {
+  background:
+    radial-gradient(900px 480px at 88% -8%, rgba(65, 163, 113, 0.13), transparent 65%),
+    radial-gradient(720px 420px at -6% 108%, rgba(205, 241, 75, 0.07), transparent 60%);
 }
-.animate-view {
-  animation: view-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+.dot-grid {
+  background-image: radial-gradient(rgba(228, 237, 230, 0.05) 1px, transparent 1px);
+  background-size: 26px 26px;
 }
+
+.card-lift {
+  transition:
+    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+.card-lift:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-night-500);
+  box-shadow: 0 16px 34px -18px rgba(0, 0, 0, 0.75);
+}
+
+/* ---------- motion ---------- */
 
 @keyframes rise-in {
   from {
@@ -101,7 +130,7 @@ input[type="number"] {
 @keyframes pop-in {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.965);
+    transform: translateY(12px) scale(0.965);
   }
   to {
     opacity: 1;
@@ -153,16 +182,16 @@ input[type="number"] {
 
 @keyframes ring-pulse {
   0% {
-    opacity: 0.7;
+    opacity: 0.65;
     transform: scale(0.5);
   }
   75% {
     opacity: 0;
-    transform: scale(2);
+    transform: scale(2.1);
   }
   100% {
     opacity: 0;
-    transform: scale(2);
+    transform: scale(2.1);
   }
 }
 .ring-pulse {
@@ -171,32 +200,32 @@ input[type="number"] {
   transform-origin: center;
 }
 
-/* ---------- surfaces ---------- */
-
-.bg-dots {
-  background-image: radial-gradient(rgba(12, 54, 36, 0.07) 1px, transparent 1px);
-  background-size: 22px 22px;
+@keyframes tick-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.82);
+  }
+}
+.tick-pulse {
+  animation: tick-pulse 1.6s ease-in-out infinite;
 }
 
-.sidebar-glow {
-  background-image:
-    radial-gradient(420px 260px at 85% -40px, rgba(216, 242, 75, 0.12), transparent 70%),
-    radial-gradient(360px 300px at 0% 105%, rgba(63, 131, 96, 0.35), transparent 70%);
+@keyframes marquee-x {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
 }
-
-.card-hover {
-  transition:
-    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.25s ease,
-    border-color 0.25s ease;
+.ticker-track {
+  animation: marquee-x 26s linear infinite;
 }
-.card-hover:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 14px 30px -14px rgba(12, 54, 36, 0.28);
-  border-color: var(--color-pine-300);
-}
-
-input[type="date"],
-input[type="time"] {
-  font-family: var(--font-sans);
+.ticker-track:hover {
+  animation-play-state: paused;
 }

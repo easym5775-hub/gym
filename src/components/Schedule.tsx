@@ -1,152 +1,208 @@
-import { useState } from "react";
-import type { View } from "../types";
-import { SESSION_TYPE_META } from "../types";
-import { addDays, fmtDate, fmtTime, fromISO, toISO, todayISO, WEEKDAYS, weekDates } from "../lib";
+import { useEffect, useState } from "react";
+import type { PlanItem } from "../types";
+import { CAT_META, WEEK_DAYS, WEEK_SHORT } from "../types";
+import { dayNum } from "../lib";
 import { useApp } from "../store";
-import { btnVolt } from "./ui";
-import { SessionModal } from "./modals";
-import { IconCheck, IconChevronLeft, IconChevronRight, IconPlus, IconX } from "../icons";
+import { Badge, ConfirmModal, EmptyState, SectionCard, btnVolt, inputCls, labelCls } from "./ui";
+import { PlanItemFormModal } from "./modals";
+import { IconClipboard, IconClock, IconPencil, IconPlay, IconPlus, IconTrash, IconZap } from "../icons";
 
-export function Schedule({ go }: { go: (v: View, id?: string) => void }) {
-  const { state, toggleSession, deleteSession } = useApp();
-  const [anchor, setAnchor] = useState(() => new Date());
-  const [sessionOpen, setSessionOpen] = useState(false);
-  const [presetDate, setPresetDate] = useState<string | undefined>(undefined);
+export function PlansView({ presetClientId }: { presetClientId: string | null }) {
+  const { state, deletePlanItem } = useApp();
+  const [clientId, setClientId] = useState(presetClientId ?? state.clients[0]?.id ?? "");
+  const [day, setDay] = useState(dayNum());
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<PlanItem | null>(null);
+  const [deleting, setDeleting] = useState<PlanItem | null>(null);
 
-  const days = weekDates(anchor);
-  const today = todayISO();
-  const weekSessions = state.sessions.filter((s) => days.includes(s.date));
-  const doneCount = weekSessions.filter((s) => s.done).length;
+  useEffect(() => {
+    if (presetClientId) setClientId(presetClientId);
+  }, [presetClientId]);
 
-  const shift = (dir: number) => setAnchor((a) => fromISO(addDays(toISO(a), dir * 7)));
-  const isThisWeek = days.includes(today);
+  useEffect(() => {
+    if (!clientId && state.clients.length) setClientId(state.clients[0].id);
+  }, [clientId, state.clients]);
+
+  const client = state.clients.find((c) => c.id === clientId);
+  const items = state.plans.filter((p) => p.clientId === clientId && p.day === day);
+  const countFor = (d: number) => state.plans.filter((p) => p.clientId === clientId && p.day === d).length;
+  const exOf = (id: string) => state.exercises.find((e) => e.id === id);
 
   return (
     <div>
-      <header className="flex flex-wrap items-end justify-between gap-3">
+      <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-bold text-pine-950">جدول الجلسات</h1>
-          <p className="mt-1 text-sm text-pine-500">
-            الأسبوع من <span className="font-semibold text-pine-800">{fmtDate(days[0])}</span> إلى{" "}
-            <span className="font-semibold text-pine-800">{fmtDate(days[6])}</span> — {weekSessions.length} جلسة، خلص منهم {doneCount}
-          </p>
+          <h1 className="font-display text-4xl font-bold uppercase leading-none tracking-tight text-mist-100 sm:text-5xl">
+            Workout <span className="text-volt-400">plans</span>
+          </h1>
+          <p className="mt-2 text-sm text-mist-400">Day 1 = Monday · build a weekly split per client</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center rounded-lg border border-pine-200 bg-white">
-            <button onClick={() => shift(-1)} aria-label="الأسبوع السابق" className="grid h-9 w-9 cursor-pointer place-items-center rounded-s-lg text-pine-500 transition hover:bg-pine-50 hover:text-pine-800">
-              <IconChevronRight className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setAnchor(new Date())}
-              className={`h-9 cursor-pointer border-x border-pine-100 px-3 text-xs font-bold transition ${
-                isThisWeek ? "text-pine-300" : "text-pine-700 hover:bg-pine-50"
-              }`}
-            >
-              النهارده
-            </button>
-            <button onClick={() => shift(1)} aria-label="الأسبوع القادم" className="grid h-9 w-9 cursor-pointer place-items-center rounded-e-lg text-pine-500 transition hover:bg-pine-50 hover:text-pine-800">
-              <IconChevronLeft className="h-4 w-4" />
-            </button>
-          </div>
-          <button
-            className={`${btnVolt} h-11`}
-            onClick={() => {
-              setPresetDate(today);
-              setSessionOpen(true);
-            }}
-          >
-            <IconPlus className="h-4 w-4" strokeWidth={2.4} />
-            حجز جلسة
-          </button>
+        <div className="w-full sm:w-64">
+          <label className={labelCls}>Client</label>
+          <select className={inputCls} value={clientId} onChange={(e) => setClientId(e.target.value)}>
+            {state.clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} — {c.goal}
+              </option>
+            ))}
+          </select>
         </div>
       </header>
 
-      <div className="mt-5 overflow-x-auto pb-2">
-        <div className="grid min-w-[1000px] grid-cols-7 gap-2">
-          {days.map((date, i) => {
-            const isToday = date === today;
-            const list = state.sessions.filter((s) => s.date === date).sort((a, b) => a.time.localeCompare(b.time));
-            return (
-              <div
-                key={date}
-                className={`rise flex flex-col rounded-xl border bg-white shadow-sm ${
-                  isToday ? "border-volt-500 ring-2 ring-volt-400/40" : "border-pine-100"
-                }`}
-                style={{ animationDelay: `${i * 40}ms` }}
-              >
-                <div className={`rounded-t-xl border-b px-3 py-2.5 text-center ${isToday ? "border-volt-500/40 bg-volt-300/40" : "border-pine-100/70 bg-pine-50/50"}`}>
-                  <p className="font-display text-[13px] font-bold leading-4 text-pine-950">{WEEKDAYS[i]}</p>
-                  <p className={`text-[10.5px] font-semibold ${isToday ? "text-pine-800" : "text-pine-400"}`}>
-                    {isToday ? "النهارده" : fmtDate(date)}
-                  </p>
-                </div>
+      {!client ? (
+        <div className="mt-6">
+          <EmptyState icon={<IconClipboard className="h-6 w-6" />} title="No clients yet" sub="Add a client first, then build their weekly plan here." />
+        </div>
+      ) : (
+        <>
+          <div className="rise mt-6 grid grid-cols-4 gap-1.5 sm:grid-cols-7" style={{ animationDelay: "80ms" }}>
+            {WEEK_DAYS.map((wd, i) => {
+              const d = i + 1;
+              const active = day === d;
+              const today = dayNum() === d;
+              const n = countFor(d);
+              return (
                 <button
-                  onClick={() => {
-                    setPresetDate(date);
-                    setSessionOpen(true);
-                  }}
-                  className="flex cursor-pointer items-center justify-center gap-1 border-b border-dashed border-pine-100 py-1.5 text-[10.5px] font-bold text-pine-300 transition hover:bg-pine-50 hover:text-pine-700"
+                  key={wd}
+                  onClick={() => setDay(d)}
+                  className={`cursor-pointer rounded-lg border px-1 py-2.5 text-center transition ${
+                    active
+                      ? "border-volt-400 bg-volt-400/10"
+                      : "border-night-600 bg-night-850 hover:border-night-500"
+                  }`}
                 >
-                  <IconPlus className="h-3 w-3" strokeWidth={2.6} />
-                  إضافة
+                  <span className={`block font-display text-lg font-bold leading-5 ${active ? "text-volt-300" : "text-mist-100"}`}>
+                    Day {d}
+                  </span>
+                  <span className={`block text-[10px] font-bold uppercase ${active ? "text-volt-400/80" : "text-mist-500"}`}>
+                    {WEEK_SHORT[i]}
+                    {today && <span className="ms-1 inline-block h-1.5 w-1.5 rounded-full bg-volt-400 align-middle tick-pulse" />}
+                  </span>
+                  <span className={`mt-1 block text-[10px] font-semibold ${n > 0 ? "text-mist-400" : "text-night-500"}`}>
+                    {n > 0 ? `${n} exercise${n > 1 ? "s" : ""}` : "rest"}
+                  </span>
                 </button>
-                <div className="flex min-h-[92px] flex-1 flex-col gap-1.5 p-1.5">
-                  {list.length === 0 && (
-                    <p className="flex flex-1 items-center justify-center text-[10.5px] font-medium text-pine-200">
-                      مفيش جلسات
-                    </p>
-                  )}
-                  {list.map((s) => {
-                    const c = state.clients.find((x) => x.id === s.clientId);
-                    const tm = SESSION_TYPE_META[s.type];
-                    return (
-                      <div
-                        key={s.id}
-                        className={`group rounded-lg border border-pine-100 bg-white p-2 shadow-sm transition hover:border-pine-300 hover:shadow ${
-                          s.done ? "opacity-50" : ""
-                        }`}
-                      >
-                        <div className="flex items-center gap-1">
-                          <span className="font-display text-[13px] font-bold leading-4 text-pine-900">{fmtTime(s.time)}</span>
-                          <button
-                            onClick={() => toggleSession(s.id)}
-                            aria-label="تمت الجلسة؟"
-                            className={`ms-auto grid h-5 w-5 shrink-0 cursor-pointer place-items-center rounded-full border-2 transition ${
-                              s.done ? "border-pine-600 bg-pine-600 text-white" : "border-pine-200 text-transparent hover:border-pine-500"
-                            }`}
-                          >
-                            <IconCheck className="h-3 w-3" strokeWidth={3.2} />
-                          </button>
-                          <button
-                            onClick={() => deleteSession(s.id)}
-                            aria-label="إلغاء الجلسة"
-                            className="grid h-5 w-5 shrink-0 cursor-pointer place-items-center rounded-full text-pine-200 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
-                          >
-                            <IconX className="h-3 w-3" strokeWidth={2.6} />
-                          </button>
+              );
+            })}
+          </div>
+
+          <SectionCard
+            title={`${client.name} — Day ${day} · ${WEEK_DAYS[day - 1]}`}
+            icon={<IconZap className="h-5 w-5" />}
+            className="mt-4"
+            delay={140}
+            bodyCls="p-3"
+            action={
+              <button
+                className={`${btnVolt} px-3! py-1.5! text-xs`}
+                onClick={() => {
+                  setEditing(null);
+                  setModalOpen(true);
+                }}
+              >
+                <IconPlus className="h-4 w-4" strokeWidth={2.4} />
+                Add exercise
+              </button>
+            }
+          >
+            {items.length === 0 ? (
+              <EmptyState
+                icon={<IconClipboard className="h-6 w-6" />}
+                title="Rest day — or a blank page"
+                sub={`Nothing programmed for ${WEEK_DAYS[day - 1]}. Add exercises from the library, or leave it for recovery.`}
+              >
+                <button
+                  className={`${btnVolt} mt-2`}
+                  onClick={() => {
+                    setEditing(null);
+                    setModalOpen(true);
+                  }}
+                >
+                  <IconPlus className="h-4 w-4" strokeWidth={2.4} />
+                  Add exercise
+                </button>
+              </EmptyState>
+            ) : (
+              <ul className="grid gap-2">
+                {items.map((item, idx) => {
+                  const ex = exOf(item.exerciseId);
+                  return (
+                    <li key={item.id} className="rise group flex items-center gap-3 rounded-lg border border-night-700 bg-night-800 p-3 transition hover:border-night-500" style={{ animationDelay: `${idx * 50}ms` }}>
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-night-700 font-display text-lg font-bold text-volt-300">
+                        {idx + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate font-bold text-mist-100">{ex?.name ?? "Removed exercise"}</p>
+                          {ex && (
+                            <Badge className={CAT_META[ex.category].chip}>
+                              <span className={`h-1.5 w-1.5 rounded-full ${CAT_META[ex.category].dot}`} />
+                              {ex.category}
+                            </Badge>
+                          )}
                         </div>
-                        <button
-                          onClick={() => c && go("client", c.id)}
-                          className="mt-0.5 block w-full cursor-pointer truncate text-start text-[11.5px] font-bold text-pine-800 hover:text-pine-600 hover:underline"
-                        >
-                          {c?.name ?? "عميل"}
-                        </button>
-                        <p className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold text-pine-400">
-                          <span className={`h-1.5 w-1.5 rounded-full ${tm.dot}`} />
-                          {s.type}
-                          {s.note && <span className="truncate font-medium"> — {s.note}</span>}
+                        <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs font-semibold text-mist-400">
+                          <span className="font-display text-base text-mist-200">
+                            {item.sets} × {item.reps}
+                            <span className="text-mist-500"> reps</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <IconClock className="h-3.5 w-3.5" />
+                            {item.rest > 0 ? `${item.rest}s rest` : "no rest"}
+                          </span>
+                          {item.notes && <span className="text-mist-500 italic">"{item.notes}"</span>}
                         </p>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+                      <div className="flex shrink-0 items-center gap-1 opacity-60 transition group-hover:opacity-100">
+                        {ex?.videoUrl && (
+                          <a
+                            href={ex.videoUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="grid h-8 w-8 place-items-center rounded-lg text-mist-400 transition hover:bg-night-700 hover:text-volt-300"
+                            title="Watch video"
+                          >
+                            <IconPlay className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+                        <button
+                          className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-mist-400 transition hover:bg-night-700 hover:text-mist-100"
+                          title="Edit"
+                          onClick={() => {
+                            setEditing(item);
+                            setModalOpen(true);
+                          }}
+                        >
+                          <IconPencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-mist-400 transition hover:bg-danger-500/15 hover:text-danger-300"
+                          title="Remove"
+                          onClick={() => setDeleting(item)}
+                        >
+                          <IconTrash className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </SectionCard>
+        </>
+      )}
 
-      <SessionModal open={sessionOpen} presetDate={presetDate} presetClient={null} onClose={() => setSessionOpen(false)} />
+      {client && (
+        <PlanItemFormModal open={modalOpen} clientId={client.id} day={day} initial={editing} onClose={() => setModalOpen(false)} />
+      )}
+      <ConfirmModal
+        open={!!deleting}
+        onClose={() => setDeleting(null)}
+        title="Remove from plan?"
+        message={<>This exercise will be removed from Day {day}. The exercise itself stays in the library.</>}
+        confirmLabel="Remove"
+        onConfirm={() => deleting && deletePlanItem(deleting.id)}
+      />
     </div>
   );
 }

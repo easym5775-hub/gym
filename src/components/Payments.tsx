@@ -1,186 +1,210 @@
-import { useState } from "react";
-import type { Client, View } from "../types";
-import {
-  fmtDate,
-  fmtMoney,
-  monthKey,
-  subDaysLabel,
-  subState,
-  todayISO,
-  SUB_META,
-} from "../lib";
+import { useEffect, useState } from "react";
+import type { Meal, MealType } from "../types";
+import { MEAL_META, MEAL_TYPES } from "../types";
 import { useApp } from "../store";
-import { Avatar, Badge, SectionCard, btnVolt, useCountUp } from "./ui";
-import { RevenueBars } from "./Chart";
-import { RenewModal } from "./modals";
-import { IconAlert, IconWallet } from "../icons";
+import { Badge, ConfirmModal, EmptyState, SectionCard, btnVolt, inputCls, labelCls } from "./ui";
+import { MealFormModal } from "./modals";
+import { IconFlame, IconPencil, IconPlus, IconTrash, IconUtensils } from "../icons";
 
-export function Payments({ go }: { go: (v: View, id?: string) => void }) {
-  const { state } = useApp();
-  const [renewFor, setRenewFor] = useState<Client | null>(null);
+const MACRO_COLORS: Record<string, string> = {
+  protein: "bg-volt-400",
+  carbs: "bg-sky-400",
+  fats: "bg-warn-400",
+};
 
-  const today = todayISO();
-  const nowKey = monthKey(today);
-  const monthPays = state.payments.filter((p) => monthKey(p.date) === nowKey);
-  const revenueMonth = monthPays.reduce((s, p) => s + p.amount, 0);
-  const needRenew = state.clients
-    .filter((c) => subState(c) !== "active")
-    .sort((a, b) => a.subEnd.localeCompare(b.subEnd));
-  const activeClients = state.clients.filter((c) => subState(c) !== "expired");
-  const avgPlan = activeClients.length
-    ? Math.round(activeClients.reduce((s, c) => s + c.planPrice, 0) / activeClients.length)
-    : 0;
-  const lastPays = [...state.payments].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 6);
-  const nameOf = (id: string) => state.clients.find((c) => c.id === id);
+export function MealsView({ presetClientId }: { presetClientId: string | null }) {
+  const { state, deleteMeal } = useApp();
+  const [clientId, setClientId] = useState(presetClientId ?? state.clients[0]?.id ?? "");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<Meal | null>(null);
+  const [defaultType, setDefaultType] = useState<MealType>("Breakfast");
+  const [deleting, setDeleting] = useState<Meal | null>(null);
 
-  const animRevenue = useCountUp(revenueMonth);
+  useEffect(() => {
+    if (presetClientId) setClientId(presetClientId);
+  }, [presetClientId]);
 
-  const sortedClients = [...state.clients].sort((a, b) => {
-    const order = { expired: 0, soon: 1, active: 2 } as const;
-    const diff = order[subState(a)] - order[subState(b)];
-    return diff !== 0 ? diff : a.subEnd.localeCompare(b.subEnd);
-  });
+  useEffect(() => {
+    if (!clientId && state.clients.length) setClientId(state.clients[0].id);
+  }, [clientId, state.clients]);
+
+  const client = state.clients.find((c) => c.id === clientId);
+  const meals = state.meals.filter((m) => m.clientId === clientId);
+  const totals = meals.reduce(
+    (acc, m) => ({
+      calories: acc.calories + m.calories,
+      protein: acc.protein + m.protein,
+      carbs: acc.carbs + m.carbs,
+      fats: acc.fats + m.fats,
+    }),
+    { calories: 0, protein: 0, carbs: 0, fats: 0 },
+  );
+  const kcalFrom = {
+    protein: totals.protein * 4,
+    carbs: totals.carbs * 4,
+    fats: totals.fats * 9,
+  };
+  const kcalSum = kcalFrom.protein + kcalFrom.carbs + kcalFrom.fats;
 
   return (
     <div>
-      <header className="flex flex-wrap items-end justify-between gap-3">
+      <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-bold text-pine-950">الاشتراكات والمدفوعات</h1>
-          <p className="mt-1 text-sm text-pine-500">تابع الإيراد، وجدّد الاشتراكات قبل ما العملاء يمشوا</p>
+          <h1 className="font-display text-4xl font-bold uppercase leading-none tracking-tight text-mist-100 sm:text-5xl">
+            Meal <span className="text-volt-400">plans</span>
+          </h1>
+          <p className="mt-2 text-sm text-mist-400">Daily nutrition targets assigned per client</p>
         </div>
-        <button className={`${btnVolt} h-11 disabled:pointer-events-none disabled:opacity-40`} onClick={() => setRenewFor(needRenew[0] ?? null)} disabled={!needRenew.length}>
-          <IconAlert className="h-4 w-4" />
-          تجديد أسرع حالة
-        </button>
+        <div className="w-full sm:w-64">
+          <label className={labelCls}>Client</label>
+          <select className={inputCls} value={clientId} onChange={(e) => setClientId(e.target.value)}>
+            {state.clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} — {c.goal}
+              </option>
+            ))}
+          </select>
+        </div>
       </header>
 
-      <div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <div className="rise rounded-xl border border-pine-100 bg-pine-950 p-4 text-white shadow-sm sidebar-glow">
-          <p className="text-[11px] font-semibold text-pine-300">إيراد الشهر الحالي</p>
-          <p className="mt-1 font-display text-[26px] font-bold leading-7 text-volt-300">
-            {Math.round(animRevenue).toLocaleString("en-US")} <span className="text-sm font-medium text-pine-200">ج.م</span>
-          </p>
-          <p className="mt-1 text-[11px] text-pine-400">{monthPays.length} دفعة</p>
+      {!client ? (
+        <div className="mt-6">
+          <EmptyState icon={<IconUtensils className="h-6 w-6" />} title="No clients yet" sub="Add a client first, then assign their meals." />
         </div>
-        <div className="rise rounded-xl border border-pine-100 bg-white p-4 shadow-sm" style={{ animationDelay: "70ms" }}>
-          <p className="text-[11px] font-semibold text-pine-500">محتاجين تجديد</p>
-          <p className={`mt-1 font-display text-[26px] font-bold leading-7 ${needRenew.length ? "text-red-600" : "text-pine-950"}`}>
-            {needRenew.length}
-          </p>
-          <p className="mt-1 text-[11px] text-pine-400">منتهي أو باقي له أسبوع</p>
-        </div>
-        <div className="rise rounded-xl border border-pine-100 bg-white p-4 shadow-sm" style={{ animationDelay: "140ms" }}>
-          <p className="text-[11px] font-semibold text-pine-500">متوسط قيمة الاشتراك</p>
-          <p className="mt-1 font-display text-[26px] font-bold leading-7 text-pine-950">{avgPlan.toLocaleString("en-US")}</p>
-          <p className="mt-1 text-[11px] text-pine-400">ج.م للعميل النشط</p>
-        </div>
-        <div className="rise rounded-xl border border-pine-100 bg-white p-4 shadow-sm" style={{ animationDelay: "210ms" }}>
-          <p className="text-[11px] font-semibold text-pine-500">إجمالي الدفعات</p>
-          <p className="mt-1 font-display text-[26px] font-bold leading-7 text-pine-950">{state.payments.length}</p>
-          <p className="mt-1 text-[11px] text-pine-400">منذ بداية الاستخدام</p>
-        </div>
-      </div>
+      ) : (
+        <>
+          {/* daily summary */}
+          <div className="rise mt-6 rounded-xl border border-night-700 bg-night-850 p-5" style={{ animationDelay: "80ms" }}>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <span className="grid h-12 w-12 place-items-center rounded-lg bg-warn-400/15 text-warn-300">
+                  <IconFlame className="h-6 w-6" />
+                </span>
+                <div>
+                  <p className="font-display text-[30px] font-bold leading-7 text-mist-100">
+                    {totals.calories.toLocaleString("en-US")}
+                    <span className="ms-1.5 text-sm font-semibold text-mist-500">kcal / day</span>
+                  </p>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-mist-500">{client.name}'s daily target</p>
+                </div>
+              </div>
+              <div className="flex gap-5">
+                {(
+                  [
+                    ["Protein", totals.protein, "P", "text-volt-300"],
+                    ["Carbs", totals.carbs, "C", "text-sky-300"],
+                    ["Fats", totals.fats, "F", "text-warn-300"],
+                  ] as const
+                ).map(([label, v, , tone]) => (
+                  <div key={label} className="text-center">
+                    <p className={`font-display text-2xl font-bold ${tone}`}>{v}g</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-mist-500">{label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {kcalSum > 0 && (
+              <div className="mt-4 flex h-2.5 overflow-hidden rounded-full bg-night-700">
+                <div className="bar-grow h-full bg-volt-400" style={{ width: `${(kcalFrom.protein / kcalSum) * 100}%`, animationDelay: "100ms" }} title={`Protein ${kcalFrom.protein} kcal`} />
+                <div className="bar-grow h-full bg-sky-400" style={{ width: `${(kcalFrom.carbs / kcalSum) * 100}%`, animationDelay: "200ms" }} title={`Carbs ${kcalFrom.carbs} kcal`} />
+                <div className="bar-grow h-full bg-warn-400" style={{ width: `${(kcalFrom.fats / kcalSum) * 100}%`, animationDelay: "300ms" }} title={`Fats ${kcalFrom.fats} kcal`} />
+              </div>
+            )}
+            {kcalSum > 0 && (
+              <div className="mt-2 flex gap-4 text-[10.5px] font-bold text-mist-500">
+                <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-volt-400" />Protein {Math.round((kcalFrom.protein / kcalSum) * 100)}%</span>
+                <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-sky-400" />Carbs {Math.round((kcalFrom.carbs / kcalSum) * 100)}%</span>
+                <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-warn-400" />Fats {Math.round((kcalFrom.fats / kcalSum) * 100)}%</span>
+              </div>
+            )}
+          </div>
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-3">
-        <SectionCard title="الإيرادات — آخر 6 شهور" icon={<IconWallet className="h-4.5 w-4.5" />} className="lg:col-span-2" delay={120} bodyCls="p-5 pt-6">
-          <RevenueBars payments={state.payments} />
-        </SectionCard>
-
-        <SectionCard title="آخر الدفعات" icon={<IconWallet className="h-4.5 w-4.5" />} delay={180} bodyCls="p-3">
-          {lastPays.length === 0 ? (
-            <p className="px-4 py-8 text-center text-xs text-pine-400">مفيش دفعات مسجلة لسه</p>
-          ) : (
-            <ul className="grid gap-1">
-              {lastPays.map((p) => {
-                const c = nameOf(p.clientId);
-                return (
-                  <li key={p.id} className="flex items-center gap-2.5 rounded-lg px-2 py-2 transition hover:bg-pine-50">
-                    <Avatar name={c?.name ?? "؟"} color={c?.color ?? "pine"} className="h-9 w-9 rounded-lg text-xs" />
-                    <button className="min-w-0 flex-1 cursor-pointer text-start" onClick={() => c && go("client", c.id)}>
-                      <span className="block truncate text-sm font-semibold text-pine-950">{c?.name ?? "عميل محذوف"}</span>
-                      <span className="block text-[11px] text-pine-400">
-                        {p.plan} • {fmtDate(p.date)}
-                      </span>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            {MEAL_TYPES.map((t, ti) => {
+              const list = meals.filter((m) => m.type === t);
+              return (
+                <SectionCard
+                  key={t}
+                  title={t}
+                  icon={<IconUtensils className="h-5 w-5" />}
+                  delay={140 + ti * 60}
+                  bodyCls="p-3"
+                  action={
+                    <button
+                      className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg border border-night-600 text-mist-400 transition hover:border-volt-400 hover:text-volt-300"
+                      title={`Add ${t.toLowerCase()}`}
+                      onClick={() => {
+                        setEditing(null);
+                        setDefaultType(t);
+                        setModalOpen(true);
+                      }}
+                    >
+                      <IconPlus className="h-4 w-4" />
                     </button>
-                    <span className="shrink-0 font-display text-sm font-bold text-pine-700">+{fmtMoney(p.amount)}</span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </SectionCard>
-      </div>
+                  }
+                >
+                  {list.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-night-600 px-4 py-6 text-center text-xs text-mist-500">
+                      No {t.toLowerCase()} assigned
+                    </p>
+                  ) : (
+                    <ul className="grid gap-2">
+                      {list.map((m) => (
+                        <li key={m.id} className="group rounded-lg border border-night-700 bg-night-800 p-3 transition hover:border-night-500">
+                          <div className="flex items-start gap-2">
+                            <Badge className={MEAL_META[m.type].chip}>{m.type}</Badge>
+                            <div className="ms-auto flex gap-1 opacity-60 transition group-hover:opacity-100">
+                              <button
+                                className="grid h-7 w-7 cursor-pointer place-items-center rounded-md text-mist-400 transition hover:bg-night-700 hover:text-mist-100"
+                                title="Edit"
+                                onClick={() => {
+                                  setEditing(m);
+                                  setModalOpen(true);
+                                }}
+                              >
+                                <IconPencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                className="grid h-7 w-7 cursor-pointer place-items-center rounded-md text-mist-400 transition hover:bg-danger-500/15 hover:text-danger-300"
+                                title="Delete"
+                                onClick={() => setDeleting(m)}
+                              >
+                                <IconTrash className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                          <p className="mt-2 text-sm font-semibold leading-5 text-mist-100">{m.description}</p>
+                          <p className="mt-1.5 flex items-center gap-3 text-[11px] font-bold text-mist-400">
+                            <span className="font-display text-base text-warn-300">{m.calories} kcal</span>
+                            <span className="text-volt-300">P {m.protein}g</span>
+                            <span className="text-sky-300">C {m.carbs}g</span>
+                            <span className="text-warn-300">F {m.fats}g</span>
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </SectionCard>
+              );
+            })}
+          </div>
+        </>
+      )}
 
-      <SectionCard title="اشتراكات العملاء" icon={<IconAlert className="h-4.5 w-4.5" />} delay={240} bodyCls="p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-sm">
-            <thead>
-              <tr className="border-b border-pine-100 bg-pine-50/60 text-[11px] font-bold text-pine-400">
-                <th className="px-5 py-3 text-start">العميل</th>
-                <th className="px-4 py-3 text-start">الخطة</th>
-                <th className="px-4 py-3 text-start">القيمة</th>
-                <th className="px-4 py-3 text-start">تاريخ الانتهاء</th>
-                <th className="px-4 py-3 text-start">الحالة</th>
-                <th className="px-4 py-3 text-start">آخر دفعة</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {sortedClients.map((c) => {
-                const st = subState(c);
-                const meta = SUB_META[st];
-                const lastPay = state.payments
-                  .filter((p) => p.clientId === c.id)
-                  .sort((a, b) => b.date.localeCompare(a.date))[0];
-                return (
-                  <tr key={c.id} className="border-b border-pine-100/60 transition last:border-0 hover:bg-pine-50/50">
-                    <td className="px-5 py-3">
-                      <button className="flex cursor-pointer items-center gap-2.5 text-start" onClick={() => go("client", c.id)}>
-                        <Avatar name={c.name} color={c.color} className="h-9 w-9 rounded-lg text-xs" />
-                        <span>
-                          <span className="block font-semibold text-pine-950 hover:underline">{c.name}</span>
-                          <span className="block text-[11px] text-pine-400" dir="ltr" style={{ textAlign: "start" }}>
-                            {c.phone}
-                          </span>
-                        </span>
-                      </button>
-                    </td>
-                    <td className="px-4 py-3 font-semibold text-pine-800">{c.plan}</td>
-                    <td className="px-4 py-3 font-display font-bold text-pine-900">{fmtMoney(c.planPrice)}</td>
-                    <td className="px-4 py-3">
-                      <span className="block text-pine-800">{fmtDate(c.subEnd)}</span>
-                      <span className={`block text-[11px] font-bold ${meta.text}`}>{subDaysLabel(c)}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge className={meta.badge}>
-                        <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
-                        {meta.label}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-pine-600">{lastPay ? `${fmtMoney(lastPay.amount)} • ${fmtDate(lastPay.date)}` : "—"}</td>
-                    <td className="px-4 py-3 text-end">
-                      <button
-                        onClick={() => setRenewFor(c)}
-                        className={`cursor-pointer rounded-lg px-3 py-1.5 text-xs font-bold transition active:scale-95 ${
-                          st === "expired"
-                            ? "bg-red-600 text-white hover:bg-red-500"
-                            : st === "soon"
-                              ? "bg-amber-500 text-white hover:bg-amber-400"
-                              : "border border-pine-200 text-pine-700 hover:border-pine-400 hover:bg-pine-50"
-                        }`}
-                      >
-                        تجديد
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </SectionCard>
-
-      <RenewModal client={renewFor} onClose={() => setRenewFor(null)} />
+      {client && (
+        <MealFormModal open={modalOpen} clientId={client.id} initial={editing} defaultType={defaultType} onClose={() => setModalOpen(false)} />
+      )}
+      <ConfirmModal
+        open={!!deleting}
+        onClose={() => setDeleting(null)}
+        title="Remove meal?"
+        message={<>"{deleting?.description}" will be removed from the plan.</>}
+        confirmLabel="Remove"
+        onConfirm={() => deleting && deleteMeal(deleting.id)}
+      />
     </div>
   );
 }
+
+/* keep the unused-import linter calm for MACRO_COLORS (used via legend colors inline) */
+void MACRO_COLORS;

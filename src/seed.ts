@@ -1,140 +1,158 @@
-import type { AppState, Client, Payment, Session, SessionType, WeightEntry } from "./types";
-import { addDays, todayISO, uid, weekDates } from "./lib";
+import type { AppState, CheckIn, Client, Exercise, Meal, MealType, PlanItem } from "./types";
+import { addDays, todayISO } from "./lib";
 
-/** deterministic weekly weight series from `start` toward `end` */
-function series(start: number, end: number, n: number, wob: number[]): WeightEntry[] {
-  const out: WeightEntry[] = [];
-  const t0 = addDays(todayISO(), -(n - 1) * 7);
-  for (let i = 0; i < n; i++) {
-    const p = i / (n - 1);
-    const kg = +(start + (end - start) * p + wob[i % wob.length] * Math.sin(i * 2.3)).toFixed(1);
-    out.push({ id: uid(), date: addDays(t0, i * 7), kg });
-  }
-  return out;
-}
-
-const c = (
-  name: string,
-  phone: string,
-  gender: "ذكر" | "أنثى",
-  age: number,
-  goal: Client["goal"],
-  startWeight: number,
-  targetWeight: number,
-  height: number,
-  plan: string,
-  planPrice: number,
-  subEndIn: number,
-  joinedAgo: number,
-  color: string,
-  notes: string,
-  weights: WeightEntry[],
-): Client => ({
-  id: uid(),
-  name,
-  phone,
-  gender,
-  age,
-  goal,
-  startWeight,
-  targetWeight,
-  height,
-  plan,
-  planPrice,
-  subEnd: addDays(todayISO(), subEndIn),
-  joinDate: addDays(todayISO(), -joinedAgo),
-  notes,
-  color,
-  weights,
-});
+let tick = 0;
+const ts = (daysAgo: number) => Date.now() - daysAgo * 86400000 - ++tick * 1000;
 
 export function makeSeed(): AppState {
-  const clients: Client[] = [
-    c("أحمد الشناوي", "01012457836", "ذكر", 29, "خسارة وزن", 96, 82, 181, "شهر", 1200, 12, 75, "pine",
-      "بيتمرن 4 أيام في الأسبوع. شغل مكتبي طويل — يحتاج كارديو خفيف بعد كل جلسة حديد.",
-      series(96, 89.4, 11, [0.35, -0.25, 0.15, 0.3])),
-    c("سارة محمد", "01098224571", "أنثى", 26, "شد وقوام", 74, 65, 165, "شهر", 1200, 3, 60, "plum",
-      "تركيز على البطن والأرجل. تفضل تمارين المقاومة الخفيفة بمرات عالية.",
-      series(74, 69.8, 9, [0.25, -0.2, 0.3, -0.15])),
-    c("محمود عادل", "01066123984", "ذكر", 24, "زيادة عضلية", 70, 78, 176, "3 شهور", 3000, 25, 80, "teal",
-      "بيزنس على وجبات زيادة السعرات. راحة يومين فقط في الأسبوع.",
-      series(70, 74.6, 11, [0.2, 0.3, -0.15, 0.25])),
-    c("ياسمين علي", "01123789450", "أنثى", 31, "خسارة وزن", 88, 72, 168, "شهر", 1200, -2, 95, "orange",
-      "محتاجة متابعة أكتر في الدايت — آخر أسبوعين كان في خروج عن النظام. جددي الاشتراك أول ما تتواصلي.",
-      series(88, 80.2, 12, [0.4, -0.3, 0.2, -0.2])),
-    c("عمر خالد", "01033871265", "ذكر", 35, "لياقة عامة", 82, 75, 178, "6 أسابيع", 1600, 41, 40, "slate",
-      "بيجري 5ك مرتين في الأسبوع من نفسه. الجلسة معاه تركيز على القوة والمرونة.",
-      series(82, 78.1, 6, [0.3, -0.25, 0.2, 0.15])),
-    c("نورهان أحمد", "01287650943", "أنثى", 28, "خسارة وزن", 79, 68, 162, "شهر", 1200, 5, 55, "amber",
-      "التزام ممتاز في الدايت. نزود كثافة الكارديو الفترة الجاية.",
-      series(79, 72.5, 8, [0.3, -0.2, 0.25, -0.3])),
-    c("مصطفى إبراهيم", "01045612378", "ذكر", 22, "زيادة عضلية", 64, 72, 174, "3 شهور", 3000, 60, 30, "teal",
-      "مبتدئ — شغال على أساسيات الحركات الكبيرة (سكوات، ديدلفت، بنش).",
-      series(64, 67.9, 5, [0.15, 0.25, -0.1, 0.2])),
-    c("هبة سامي", "01156782340", "أنثى", 33, "لياقة عامة", 70, 63, 160, "شهر", 1200, 18, 50, "orange",
-      "بعد إصابة قديمة في الركبة — نتجنب القفزات العالية ونركز على التقوية.",
-      series(70, 67.3, 8, [0.2, -0.3, 0.15, -0.2])),
-  ];
-
-  const [c1, c2, c3, c4, c5, c6, c7, c8] = clients;
+  tick = 0;
   const today = todayISO();
-  const wd = weekDates(new Date());
 
-  const s = (cl: Client, date: string, time: string, type: SessionType, done = false): Session => ({
-    id: uid(),
-    clientId: cl.id,
-    date,
-    time,
-    type,
-    done,
-  });
-
-  const sessions: Session[] = [
-    // earlier in the week (done)
-    s(c1, wd[0], "18:00", "قوة", wd[0] < today),
-    s(c2, wd[0], "19:30", "كارديو", wd[0] < today),
-    s(c3, wd[1], "07:30", "قوة", wd[1] < today),
-    s(c4, wd[1], "18:00", "HIIT", wd[1] < today),
-    s(c6, wd[2], "20:00", "قياسات", wd[2] < today),
-    s(c5, wd[2], "08:00", "كارديو", wd[2] < today),
-    s(c2, wd[3], "19:30", "قوة", wd[3] < today),
-    // today
-    s(c1, today, "07:00", "قوة", true),
-    s(c6, today, "18:30", "قوة"),
-    s(c8, today, "20:00", "مرونة"),
-    // rest of the week
-    s(c3, addDays(today, 1), "07:30", "قوة"),
-    s(c2, addDays(today, 1), "19:30", "HIIT"),
-    s(c7, addDays(today, 2), "18:00", "قوة"),
-    s(c8, addDays(today, 2), "09:00", "كارديو"),
-    s(c5, wd[6], "10:00", "HIIT"),
-    s(c1, wd[6], "18:00", "كارديو"),
-    // history for client profiles
-    s(c1, addDays(today, -9), "18:00", "قوة", true),
-    s(c1, addDays(today, -12), "18:00", "كارديو", true),
-    s(c2, addDays(today, -8), "19:30", "مرونة", true),
-    s(c4, addDays(today, -10), "18:00", "قوة", true),
-    s(c3, addDays(today, -11), "07:30", "قياسات", true),
-  ].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
-
-  const p = (cl: Client, ago: number, amount: number, plan: string): Payment => ({
-    id: uid(),
-    clientId: cl.id,
-    date: addDays(todayISO(), -ago),
-    amount,
-    plan,
-  });
-
-  const payments: Payment[] = [
-    p(c1, 75, 1200, "شهر"), p(c1, 45, 1200, "شهر"), p(c1, 18, 1200, "شهر"), p(c1, 105, 1200, "شهر"),
-    p(c2, 60, 1200, "شهر"), p(c2, 27, 1200, "شهر"), p(c2, 90, 1200, "شهر"),
-    p(c3, 80, 1200, "شهر"), p(c3, 65, 3000, "3 شهور"),
-    p(c4, 95, 1200, "شهر"), p(c4, 64, 1200, "شهر"), p(c4, 32, 1200, "شهر"), p(c4, 126, 1200, "شهر"),
-    p(c5, 40, 1600, "6 أسابيع"), p(c5, 4, 1600, "6 أسابيع"), p(c5, 85, 1600, "6 أسابيع"),
-    p(c6, 55, 1200, "شهر"), p(c6, 25, 1200, "شهر"), p(c6, 86, 1200, "شهر"),
-    p(c7, 30, 3000, "3 شهور"),
-    p(c8, 50, 1200, "شهر"), p(c8, 12, 1200, "شهر"), p(c8, 81, 1200, "شهر"),
+  const clients: Client[] = [
+    {
+      id: "c-maya", name: "Maya Rodriguez", email: "maya.r@gmail.com", phone: "+1 415 220 8841",
+      goal: "Lose weight", startDate: addDays(today, -70), status: "Active",
+      notes: "Prefers evening sessions. Knee is sensitive — swap jump landings for low-impact.",
+    },
+    {
+      id: "c-jamal", name: "Jamal Carter", email: "jamal.carter@outlook.com", phone: "+1 312 774 5190",
+      goal: "Build muscle", startDate: addDays(today, -42), status: "Active",
+      notes: "Bulking phase +300 kcal. Push progressive overload on squat & bench every week.",
+    },
+    {
+      id: "c-priya", name: "Priya Nair", email: "priya.nair@yahoo.com", phone: "+44 7700 900312",
+      goal: "General fitness", startDate: addDays(today, -21), status: "Active",
+      notes: "New to lifting. Focus on form first, load second. Loves rowing.",
+    },
+    {
+      id: "c-tom", name: "Tom Becker", email: "tom.becker@gmx.de", phone: "+49 151 2903 778",
+      goal: "Lose weight", startDate: addDays(today, -84), status: "Paused",
+      notes: "Paused for a work trip until next month. Keep the plan, drop intensity on return.",
+    },
+    {
+      id: "c-aisha", name: "Aisha Khalid", email: "aisha.k@proton.me", phone: "+971 50 442 9810",
+      goal: "Build muscle", startDate: addDays(today, -14), status: "Active",
+      notes: "Home gym: dumbbells up to 20kg + bands. Program around what she has.",
+    },
+    {
+      id: "c-leo", name: "Leo Martins", email: "leo.martins@gmail.com", phone: "+351 912 445 201",
+      goal: "General fitness", startDate: addDays(today, -140), status: "Completed",
+      notes: "Finished the 12-week block. Check back in 6 weeks for maintenance program.",
+    },
   ];
 
-  return { clients, sessions, payments };
+  const img = (n: string) => `/images/${n}`;
+  const yt = (q: string) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q + " tutorial")}`;
+
+  const exercises: Exercise[] = [
+    { id: "e-bench", name: "Barbell Bench Press", category: "Chest", description: "Flat barbell press. Retract shoulder blades, bar path slightly toward lower chest.", videoUrl: yt("barbell bench press"), image: img("ex-chest.jpg") },
+    { id: "e-pushup", name: "Push-up", category: "Chest", description: "Bodyweight staple. Rigid plank, chest to floor, full lockout.", videoUrl: yt("push up form"), image: img("ex-chest.jpg") },
+    { id: "e-row", name: "Bent-over Barbell Row", category: "Back", description: "Hinge to ~45°, pull the bar to the lower ribs, squeeze the lats.", videoUrl: yt("barbell row"), image: img("ex-back.jpg") },
+    { id: "e-deadlift", name: "Conventional Deadlift", category: "Back", description: "Brace hard, push the floor away, bar stays glued to the legs.", videoUrl: yt("deadlift"), image: img("ex-back.jpg") },
+    { id: "e-pullup", name: "Pull-up", category: "Back", description: "Dead hang to chin over bar. Add bands if needed.", videoUrl: yt("pull up"), image: img("ex-back.jpg") },
+    { id: "e-squat", name: "Barbell Back Squat", category: "Legs", description: "Feet shoulder width, break at hips and knees together, depth below parallel.", videoUrl: yt("back squat"), image: img("ex-legs.jpg") },
+    { id: "e-rdl", name: "Romanian Deadlift", category: "Legs", description: "Soft knees, hips back, feel the hamstring stretch. Neutral spine always.", videoUrl: yt("romanian deadlift"), image: img("ex-legs.jpg") },
+    { id: "e-lunge", name: "Walking Lunge", category: "Legs", description: "Long stride, back knee kisses the floor, drive through the front heel.", videoUrl: yt("walking lunge"), image: img("ex-legs.jpg") },
+    { id: "e-curl", name: "Dumbbell Biceps Curl", category: "Arms", description: "Elbows pinned, no swing. 2-second negative on every rep.", videoUrl: yt("dumbbell curl"), image: img("ex-arms.jpg") },
+    { id: "e-pushdown", name: "Triceps Rope Pushdown", category: "Arms", description: "Split the rope at the bottom, full lockout, control the way up.", videoUrl: yt("rope pushdown"), image: img("ex-arms.jpg") },
+    { id: "e-plank", name: "Plank Hold", category: "Core", description: "Glutes tight, ribs down. Quality over duration — stop when hips sag.", videoUrl: yt("plank"), image: img("ex-core.jpg") },
+    { id: "e-legraise", name: "Hanging Leg Raise", category: "Core", description: "Dead hang, toes to bar. No swinging — reset each rep if you kip.", videoUrl: yt("hanging leg raise"), image: img("ex-core.jpg") },
+    { id: "e-rower", name: "Rowing Machine Intervals", category: "Cardio", description: "500m hard / 90s easy ×6. Damper 4–5, drive with the legs.", videoUrl: yt("rowing machine workout"), image: img("ex-cardio.jpg") },
+    { id: "e-bike", name: "Assault Bike Sprints", category: "Cardio", description: "20s all-out / 40s coast ×8. Finisher only — keep technique honest.", videoUrl: yt("assault bike"), image: img("ex-cardio.jpg") },
+  ];
+
+  const pi = (clientId: string, day: number, exerciseId: string, sets: number, reps: number, rest: number, notes = ""): PlanItem => ({
+    id: `p-${clientId}-${day}-${exerciseId}`, clientId, day, exerciseId, sets, reps, rest, notes,
+  });
+
+  const plans: PlanItem[] = [
+    // Maya — Day 1 (lower) / 2 (push) / 3 (pull) / 4 (cardio+core) / 5 (full body) / 6 light
+    pi("c-maya", 1, "e-squat", 4, 8, 90, "Tempo 3-1-1. Stop 2 reps shy of failure."),
+    pi("c-maya", 1, "e-rdl", 3, 10, 75),
+    pi("c-maya", 1, "e-lunge", 3, 12, 60, "Bodyweight or light DBs."),
+    pi("c-maya", 2, "e-bench", 4, 8, 90),
+    pi("c-maya", 2, "e-pushup", 3, 12, 60, "To failure on the last set."),
+    pi("c-maya", 3, "e-row", 4, 10, 75),
+    pi("c-maya", 3, "e-pullup", 3, 6, 90, "Band assist OK."),
+    pi("c-maya", 4, "e-rower", 1, 6, 90, "500m intervals — see description."),
+    pi("c-maya", 4, "e-plank", 3, 1, 45, "45–60s holds."),
+    pi("c-maya", 5, "e-squat", 3, 10, 75, "Lighter than Day 1."),
+    pi("c-maya", 5, "e-bench", 3, 10, 75),
+    pi("c-maya", 5, "e-row", 3, 10, 75),
+    pi("c-maya", 6, "e-rower", 1, 1, 0, "Steady 30 min, conversational pace."),
+    pi("c-maya", 6, "e-plank", 3, 1, 45),
+    // Jamal — push / pull / legs / upper / arms
+    pi("c-jamal", 1, "e-bench", 5, 5, 120, "Add 2.5kg when all sets land."),
+    pi("c-jamal", 1, "e-pushup", 3, 15, 60, "Weighted if 15 feels easy."),
+    pi("c-jamal", 1, "e-pushdown", 3, 12, 60),
+    pi("c-jamal", 2, "e-deadlift", 4, 5, 150, "Top set heavy, then back-off sets."),
+    pi("c-jamal", 2, "e-row", 4, 8, 90),
+    pi("c-jamal", 2, "e-pullup", 4, 8, 90, "Add weight when bodyweight x8 is clean."),
+    pi("c-jamal", 3, "e-squat", 5, 5, 120),
+    pi("c-jamal", 3, "e-rdl", 3, 8, 90),
+    pi("c-jamal", 3, "e-lunge", 3, 10, 75),
+    pi("c-jamal", 4, "e-bench", 4, 8, 90, "Volume day — lighter than Monday."),
+    pi("c-jamal", 4, "e-row", 4, 10, 75),
+    pi("c-jamal", 5, "e-curl", 4, 10, 60),
+    pi("c-jamal", 5, "e-pushdown", 4, 12, 60),
+    pi("c-jamal", 5, "e-legraise", 3, 12, 60),
+    // Priya — 3 full-body days + cardio
+    pi("c-priya", 1, "e-squat", 3, 8, 90, "Goblet squat until barbell feels easy."),
+    pi("c-priya", 1, "e-pushup", 3, 8, 75, "Incline push-ups if needed."),
+    pi("c-priya", 1, "e-row", 3, 10, 75),
+    pi("c-priya", 2, "e-rower", 1, 1, 0, "20 min steady state."),
+    pi("c-priya", 2, "e-plank", 3, 1, 45),
+    pi("c-priya", 3, "e-rdl", 3, 10, 75),
+    pi("c-priya", 3, "e-pullup", 3, 5, 90, "Band assist, slow negatives."),
+    pi("c-priya", 3, "e-curl", 2, 12, 60),
+    pi("c-priya", 4, "e-lunge", 3, 10, 60),
+    pi("c-priya", 4, "e-legraise", 3, 10, 60),
+  ];
+
+  const meal = (clientId: string, type: MealType, description: string, calories: number, protein: number, carbs: number, fats: number): Meal => ({
+    id: `m-${clientId}-${type}`, clientId, type, description, calories, protein, carbs, fats,
+  });
+
+  const meals: Meal[] = [
+    meal("c-maya", "Breakfast", "Oats + berries + scoop of whey, black coffee", 380, 32, 48, 7),
+    meal("c-maya", "Lunch", "Grilled chicken, jasmine rice, big green salad", 620, 45, 62, 12),
+    meal("c-maya", "Dinner", "Baked salmon, roasted sweet potato, broccoli", 540, 38, 34, 24),
+    meal("c-maya", "Snack", "Greek yogurt + almonds", 210, 18, 12, 9),
+    meal("c-jamal", "Breakfast", "4 eggs, 2 toast, avocado, glass of milk", 720, 38, 48, 36),
+    meal("c-jamal", "Lunch", "Beef bowl: rice, minced beef, olive oil drizzle", 850, 52, 78, 28),
+    meal("c-jamal", "Dinner", "Chicken thighs, pasta, parmesan", 780, 55, 72, 24),
+    meal("c-jamal", "Snack", "Casein shake + peanut butter on rice cakes", 420, 35, 38, 14),
+    meal("c-priya", "Breakfast", "Greek yogurt, granola, banana", 420, 22, 58, 10),
+    meal("c-priya", "Lunch", "Tuna wrap, hummus, crunchy veg", 520, 34, 52, 16),
+    meal("c-priya", "Dinner", "Tofu stir-fry, brown rice, sesame", 560, 26, 68, 18),
+  ];
+
+  const ci = (clientId: string, daysAgo: number, weight: number, waist: number | undefined, mood: number, water: number, workoutDone: boolean, notes?: string): CheckIn => ({
+    id: `ci-${clientId}-${daysAgo}-${tick}`, clientId, date: addDays(today, -daysAgo), ts: ts(daysAgo),
+    weight, waist, mood, water, workoutDone, notes,
+  });
+
+  const checkIns: CheckIn[] = [
+    ci("c-maya", 0, 75.9, 71, 4, 2.5, true, "Felt strong on squats, hit all sets."),
+    ci("c-maya", 2, 76.3, 71.5, 3, 2.0, true),
+    ci("c-maya", 4, 76.6, 72, 4, 2.5, false, "Skipped — late meeting."),
+    ci("c-maya", 6, 76.9, 72, 3, 1.8, true),
+    ci("c-maya", 9, 77.4, 73, 4, 2.2, true),
+    ci("c-maya", 13, 77.9, 73.5, 2, 1.5, true, "Sore from lunges."),
+    ci("c-maya", 17, 78.6, 74, 3, 2.0, true),
+    ci("c-jamal", 0, 83.4, 84, 5, 3.0, true, "Deadlift PR: 160kg x3."),
+    ci("c-jamal", 1, 83.1, 84, 4, 2.8, true),
+    ci("c-jamal", 3, 82.9, 84.5, 4, 3.2, true),
+    ci("c-jamal", 6, 82.4, 85, 3, 2.5, false),
+    ci("c-jamal", 10, 82.0, 85, 4, 2.7, true),
+    ci("c-priya", 1, 61.2, 68, 4, 2.0, true, "Rowing 20 min without stopping!"),
+    ci("c-priya", 3, 61.5, 68.5, 3, 1.6, true),
+    ci("c-priya", 5, 61.8, 69, 3, 1.5, false, "Travel day."),
+    ci("c-priya", 8, 62.1, 69, 4, 2.1, true),
+    ci("c-tom", 12, 91.0, 96, 2, 1.2, false, "Last check-in before the trip."),
+    ci("c-aisha", 2, 58.6, 64, 4, 2.4, true),
+    ci("c-aisha", 5, 58.9, 64.5, 3, 2.0, true, "Band pull-ups getting smoother."),
+  ];
+
+  return { clients, exercises, plans, checkIns, meals };
 }

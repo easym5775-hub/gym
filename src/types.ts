@@ -1,94 +1,122 @@
-export type View = "dashboard" | "clients" | "client" | "schedule" | "payments";
+export type Goal = "Lose weight" | "Build muscle" | "General fitness";
+export type ClientStatus = "Active" | "Paused" | "Completed";
+export type ExerciseCategory = "Chest" | "Back" | "Legs" | "Arms" | "Core" | "Cardio";
+export type MealType = "Breakfast" | "Lunch" | "Dinner" | "Snack";
+export type CoachView = "dashboard" | "clients" | "plans" | "meals" | "library" | "checkins";
 
-export type Goal = "خسارة وزن" | "زيادة عضلية" | "لياقة عامة" | "شد وقوام";
-
-export type SessionType = "قوة" | "كارديو" | "HIIT" | "مرونة" | "قياسات";
-
-export interface WeightEntry {
-  id: string;
-  date: string; // ISO yyyy-mm-dd
-  kg: number;
-}
+/* ---------- tables ---------- */
 
 export interface Client {
   id: string;
   name: string;
+  email: string;
   phone: string;
-  gender: "ذكر" | "أنثى";
-  age: number;
   goal: Goal;
-  startWeight: number;
-  targetWeight: number;
-  height: number; // سم
-  plan: string;
-  planPrice: number;
-  subEnd: string; // ISO
-  joinDate: string; // ISO
+  startDate: string; // ISO
+  status: ClientStatus;
   notes: string;
-  color: string; // avatar palette key
-  weights: WeightEntry[];
+  photo?: string; // data URL
 }
 
-export interface Session {
+export interface Exercise {
+  id: string;
+  name: string;
+  category: ExerciseCategory;
+  description: string;
+  videoUrl: string; // YouTube link
+  image?: string;
+}
+
+export interface PlanItem {
+  id: string;
+  clientId: string;
+  day: number; // 1..7 (Day 1 = Monday)
+  exerciseId: string;
+  sets: number;
+  reps: number;
+  rest: number; // seconds
+  notes: string;
+}
+
+export interface CheckIn {
   id: string;
   clientId: string;
   date: string; // ISO
-  time: string; // HH:mm
-  type: SessionType;
-  done: boolean;
-  note?: string;
+  ts: number; // insertion order
+  weight: number; // kg
+  waist?: number; // cm
+  mood: number; // 1..5
+  water: number; // liters
+  workoutDone: boolean;
+  notes?: string;
+  photo?: string;
 }
 
-export interface Payment {
+export interface Meal {
   id: string;
   clientId: string;
-  date: string; // ISO
-  amount: number;
-  plan: string;
+  type: MealType;
+  description: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
 }
 
 export interface AppState {
   clients: Client[];
-  sessions: Session[];
-  payments: Payment[];
+  exercises: Exercise[];
+  plans: PlanItem[];
+  checkIns: CheckIn[];
+  meals: Meal[];
 }
 
-export const GOALS: Goal[] = ["خسارة وزن", "زيادة عضلية", "لياقة عامة", "شد وقوام"];
+/* ---------- constants ---------- */
 
-export const SESSION_TYPES: SessionType[] = ["قوة", "كارديو", "HIIT", "مرونة", "قياسات"];
+export const GOALS: Goal[] = ["Lose weight", "Build muscle", "General fitness"];
+export const STATUSES: ClientStatus[] = ["Active", "Paused", "Completed"];
+export const CATEGORIES: ExerciseCategory[] = ["Chest", "Back", "Legs", "Arms", "Core", "Cardio"];
+export const MEAL_TYPES: MealType[] = ["Breakfast", "Lunch", "Dinner", "Snack"];
 
-export interface Plan {
-  name: string;
-  days: number;
-  price: number;
-}
+export const WEEK_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+export const WEEK_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-export const PLANS: Plan[] = [
-  { name: "شهر", days: 30, price: 1200 },
-  { name: "6 أسابيع", days: 45, price: 1600 },
-  { name: "3 شهور", days: 90, price: 3000 },
-];
-
-export const GOAL_META: Record<Goal, { badge: string }> = {
-  "خسارة وزن": { badge: "bg-teal-100 text-teal-800 border-teal-200" },
-  "زيادة عضلية": { badge: "bg-orange-100 text-orange-800 border-orange-200" },
-  "لياقة عامة": { badge: "bg-sky-100 text-sky-800 border-sky-200" },
-  "شد وقوام": { badge: "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200" },
+export const GOAL_META: Record<Goal, { chip: string; dot: string; bar: string }> = {
+  "Lose weight": {
+    chip: "border-warn-400/25 bg-warn-400/10 text-warn-300",
+    dot: "bg-warn-400",
+    bar: "bg-warn-400",
+  },
+  "Build muscle": {
+    chip: "border-volt-400/25 bg-volt-400/10 text-volt-300",
+    dot: "bg-volt-400",
+    bar: "bg-volt-400",
+  },
+  "General fitness": {
+    chip: "border-moss-400/25 bg-moss-400/10 text-moss-300",
+    dot: "bg-moss-400",
+    bar: "bg-moss-400",
+  },
 };
 
-export const SESSION_TYPE_META: Record<SessionType, { chip: string; dot: string }> = {
-  قوة: { chip: "bg-pine-100 text-pine-800", dot: "bg-pine-600" },
-  كارديو: { chip: "bg-orange-100 text-orange-800", dot: "bg-orange-500" },
-  HIIT: { chip: "bg-amber-100 text-amber-800", dot: "bg-amber-500" },
-  مرونة: { chip: "bg-teal-100 text-teal-800", dot: "bg-teal-500" },
-  قياسات: { chip: "bg-fuchsia-100 text-fuchsia-800", dot: "bg-fuchsia-500" },
+export const STATUS_META: Record<ClientStatus, { chip: string; dot: string }> = {
+  Active: { chip: "border-volt-400/25 bg-volt-400/10 text-volt-300", dot: "bg-volt-400" },
+  Paused: { chip: "border-warn-400/25 bg-warn-400/10 text-warn-300", dot: "bg-warn-400" },
+  Completed: { chip: "border-night-500/50 bg-night-500/20 text-mist-300", dot: "bg-mist-400" },
 };
 
-export const AVATAR_COLORS: Record<string, { bg: string; text: string }> = {
-  pine: { bg: "bg-pine-700", text: "text-volt-300" },
-  teal: { bg: "bg-teal-700", text: "text-teal-50" },
-  orange: { bg: "bg-orange-600", text: "text-orange-50" },
-  plum: { bg: "bg-fuchsia-800", text: "text-fuchsia-50" },
-  slate: { bg: "bg-slate-700", text: "text-slate-50" },
-  amber: { bg: "bg-amber-600", text: "text-amber-50" },
+export const CAT_META: Record<ExerciseCategory, { chip: string; dot: string }> = {
+  Chest: { chip: "border-rose-400/25 bg-rose-400/10 text-rose-300", dot: "bg-rose-400" },
+  Back: { chip: "border-sky-400/25 bg-sky-400/10 text-sky-300", dot: "bg-sky-400" },
+  Legs: { chip: "border-amber-400/25 bg-amber-400/10 text-amber-300", dot: "bg-amber-400" },
+  Arms: { chip: "border-orange-400/25 bg-orange-400/10 text-orange-300", dot: "bg-orange-400" },
+  Core: { chip: "border-volt-400/25 bg-volt-400/10 text-volt-300", dot: "bg-volt-400" },
+  Cardio: { chip: "border-red-400/25 bg-red-400/10 text-red-300", dot: "bg-red-400" },
+};
+
+export const MEAL_META: Record<MealType, { chip: string; dot: string }> = {
+  Breakfast: { chip: "border-amber-400/25 bg-amber-400/10 text-amber-300", dot: "bg-amber-400" },
+  Lunch: { chip: "border-volt-400/25 bg-volt-400/10 text-volt-300", dot: "bg-volt-400" },
+  Dinner: { chip: "border-teal-400/25 bg-teal-400/10 text-teal-300", dot: "bg-teal-400" },
+  Snack: { chip: "border-rose-400/25 bg-rose-400/10 text-rose-300", dot: "bg-rose-400" },
 };

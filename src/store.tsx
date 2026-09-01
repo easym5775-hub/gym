@@ -7,12 +7,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { AppState, Client, Session } from "./types";
-import { AVATAR_COLORS, PLANS } from "./types";
-import { addDays, daysLeft, fmtDate, todayISO, uid } from "./lib";
+import type { AppState, CheckIn, Client, Exercise, Meal, PlanItem } from "./types";
+import { fmtDate, todayISO, uid } from "./lib";
 import { makeSeed } from "./seed";
 
-const KEY = "coach-crm-v1";
+const KEY = "forge-coaching-v1";
 
 export interface ToastItem {
   id: string;
@@ -24,16 +23,26 @@ interface Store {
   state: AppState;
   toasts: ToastItem[];
   toast: (msg: string, kind?: "ok" | "warn") => void;
-  dismissToast: (id: string) => void;
-  addClient: (data: Omit<Client, "id" | "color">) => Client;
+  dismiss: (id: string) => void;
+
+  addClient: (data: Omit<Client, "id">) => Client;
   updateClient: (client: Client) => void;
   deleteClient: (id: string) => void;
-  logWeight: (clientId: string, kg: number, date: string) => void;
-  updateNotes: (clientId: string, notes: string) => void;
-  addSession: (data: Omit<Session, "id" | "done">) => void;
-  toggleSession: (id: string) => void;
-  deleteSession: (id: string) => void;
-  renew: (clientId: string, planName: string) => void;
+
+  addExercise: (data: Omit<Exercise, "id">) => void;
+  updateExercise: (ex: Exercise) => void;
+  deleteExercise: (id: string) => void;
+
+  addPlanItem: (data: Omit<PlanItem, "id">) => void;
+  updatePlanItem: (item: PlanItem) => void;
+  deletePlanItem: (id: string) => void;
+
+  addMeal: (data: Omit<Meal, "id">) => void;
+  updateMeal: (meal: Meal) => void;
+  deleteMeal: (id: string) => void;
+
+  addCheckIn: (data: Omit<CheckIn, "id" | "ts">) => void;
+
   resetData: () => void;
 }
 
@@ -47,7 +56,7 @@ function load(): AppState {
       if (parsed && Array.isArray(parsed.clients)) return parsed;
     }
   } catch {
-    /* ignore corrupted storage */
+    /* corrupted storage — fall through to seed */
   }
   return makeSeed();
 }
@@ -61,13 +70,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       localStorage.setItem(KEY, JSON.stringify(state));
     } catch {
-      /* storage full — ignore */
+      console.warn("Storage full — latest change kept in memory only.");
     }
   }, [state]);
 
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
-  const dismissToast = useCallback((id: string) => {
+  const dismiss = useCallback((id: string) => {
     setToasts((t) => t.filter((x) => x.id !== id));
   }, []);
 
@@ -75,100 +84,138 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     (msg: string, kind: "ok" | "warn" = "ok") => {
       const id = uid();
       setToasts((t) => [...t.slice(-3), { id, msg, kind }]);
-      timers.current.push(window.setTimeout(() => dismissToast(id), 3600));
+      timers.current.push(window.setTimeout(() => dismiss(id), 3800));
     },
-    [dismissToast],
+    [dismiss],
   );
 
-  const addClient = useCallback((data: Omit<Client, "id" | "color">) => {
-    const keys = Object.keys(AVATAR_COLORS);
-    const client: Client = {
-      ...data,
-      id: uid(),
-      color: keys[Math.floor(Math.random() * keys.length)],
-    };
-    setState((s) => ({ ...s, clients: [client, ...s.clients] }));
-    toast(`تمت إضافة ${client.name} لعملائك`);
-    return client;
-  }, [toast]);
+  /* ----- clients ----- */
 
-  const updateClient = useCallback((client: Client) => {
-    setState((s) => ({
-      ...s,
-      clients: s.clients.map((x) => (x.id === client.id ? client : x)),
-    }));
-    toast(`تم حفظ بيانات ${client.name}`);
-  }, [toast]);
+  const addClient = useCallback(
+    (data: Omit<Client, "id">) => {
+      const client: Client = { ...data, id: uid() };
+      setState((s) => ({ ...s, clients: [client, ...s.clients] }));
+      toast(`${client.name} added to your roster`);
+      return client;
+    },
+    [toast],
+  );
 
-  const deleteClient = useCallback((id: string) => {
-    const name = state.clients.find((x) => x.id === id)?.name ?? "";
-    setState((s) => ({
-      clients: s.clients.filter((x) => x.id !== id),
-      sessions: s.sessions.filter((x) => x.clientId !== id),
-      payments: s.payments.filter((x) => x.clientId !== id),
-    }));
-    toast(`تم حذف ${name} نهائيًا`, "warn");
-  }, [state.clients, toast]);
+  const updateClient = useCallback(
+    (client: Client) => {
+      setState((s) => ({ ...s, clients: s.clients.map((x) => (x.id === client.id ? client : x)) }));
+      toast(`${client.name}'s profile updated`);
+    },
+    [toast],
+  );
 
-  const logWeight = useCallback((clientId: string, kg: number, date: string) => {
-    setState((s) => ({
-      ...s,
-      clients: s.clients.map((x) =>
-        x.id === clientId
-          ? { ...x, weights: [...x.weights, { id: uid(), date, kg }].sort((a, b) => a.date.localeCompare(b.date)) }
-          : x,
-      ),
-    }));
-    toast(`تم تسجيل الوزن: ${kg} كجم`);
-  }, [toast]);
+  const deleteClient = useCallback(
+    (id: string) => {
+      const name = state.clients.find((x) => x.id === id)?.name ?? "Client";
+      setState((s) => ({
+        ...s,
+        clients: s.clients.filter((x) => x.id !== id),
+        plans: s.plans.filter((x) => x.clientId !== id),
+        checkIns: s.checkIns.filter((x) => x.clientId !== id),
+        meals: s.meals.filter((x) => x.clientId !== id),
+      }));
+      toast(`${name} and all linked data removed`, "warn");
+    },
+    [state.clients, toast],
+  );
 
-  const updateNotes = useCallback((clientId: string, notes: string) => {
-    setState((s) => ({
-      ...s,
-      clients: s.clients.map((x) => (x.id === clientId ? { ...x, notes } : x)),
-    }));
+  /* ----- exercises ----- */
+
+  const addExercise = useCallback(
+    (data: Omit<Exercise, "id">) => {
+      setState((s) => ({ ...s, exercises: [{ ...data, id: uid() }, ...s.exercises] }));
+      toast(`"${data.name}" added to the library`);
+    },
+    [toast],
+  );
+
+  const updateExercise = useCallback(
+    (ex: Exercise) => {
+      setState((s) => ({ ...s, exercises: s.exercises.map((x) => (x.id === ex.id ? ex : x)) }));
+      toast(`"${ex.name}" updated`);
+    },
+    [toast],
+  );
+
+  const deleteExercise = useCallback(
+    (id: string) => {
+      const name = state.exercises.find((x) => x.id === id)?.name ?? "Exercise";
+      setState((s) => ({
+        ...s,
+        exercises: s.exercises.filter((x) => x.id !== id),
+        plans: s.plans.filter((x) => x.exerciseId !== id),
+      }));
+      toast(`"${name}" removed from the library`, "warn");
+    },
+    [state.exercises, toast],
+  );
+
+  /* ----- plans ----- */
+
+  const addPlanItem = useCallback(
+    (data: Omit<PlanItem, "id">) => {
+      setState((s) => ({ ...s, plans: [...s.plans, { ...data, id: uid() }] }));
+      toast(`Exercise added to Day ${data.day}`);
+    },
+    [toast],
+  );
+
+  const updatePlanItem = useCallback((item: PlanItem) => {
+    setState((s) => ({ ...s, plans: s.plans.map((x) => (x.id === item.id ? item : x)) }));
   }, []);
 
-  const addSession = useCallback((data: Omit<Session, "id" | "done">) => {
-    setState((s) => ({
-      ...s,
-      sessions: [...s.sessions, { ...data, id: uid(), done: false }],
-    }));
-    const name = state.clients.find((x) => x.id === data.clientId)?.name ?? "العميل";
-    toast(`تم حجز جلسة ${data.type} لـ${name} — ${fmtDate(data.date)}`);
-  }, [state.clients, toast]);
+  const deletePlanItem = useCallback(
+    (id: string) => {
+      setState((s) => ({ ...s, plans: s.plans.filter((x) => x.id !== id) }));
+      toast("Exercise removed from the plan", "warn");
+    },
+    [toast],
+  );
 
-  const toggleSession = useCallback((id: string) => {
-    setState((s) => ({
-      ...s,
-      sessions: s.sessions.map((x) => (x.id === id ? { ...x, done: !x.done } : x)),
-    }));
+  /* ----- meals ----- */
+
+  const addMeal = useCallback(
+    (data: Omit<Meal, "id">) => {
+      setState((s) => ({ ...s, meals: [...s.meals, { ...data, id: uid() }] }));
+      toast(`${data.type} added to the meal plan`);
+    },
+    [toast],
+  );
+
+  const updateMeal = useCallback((meal: Meal) => {
+    setState((s) => ({ ...s, meals: s.meals.map((x) => (x.id === meal.id ? meal : x)) }));
   }, []);
 
-  const deleteSession = useCallback((id: string) => {
-    setState((s) => ({ ...s, sessions: s.sessions.filter((x) => x.id !== id) }));
-    toast("تم إلغاء الجلسة", "warn");
-  }, [toast]);
+  const deleteMeal = useCallback(
+    (id: string) => {
+      setState((s) => ({ ...s, meals: s.meals.filter((x) => x.id !== id) }));
+      toast("Meal removed", "warn");
+    },
+    [toast],
+  );
 
-  const renew = useCallback((clientId: string, planName: string) => {
-    const plan = PLANS.find((x) => x.name === planName);
-    const client = state.clients.find((x) => x.id === clientId);
-    if (!plan || !client) return;
-    const base = daysLeft(client.subEnd) > 0 ? client.subEnd : todayISO();
-    const newEnd = addDays(base, plan.days);
-    setState((s) => ({
-      ...s,
-      clients: s.clients.map((x) =>
-        x.id === clientId ? { ...x, subEnd: newEnd, plan: plan.name, planPrice: plan.price } : x,
-      ),
-      payments: [...s.payments, { id: uid(), clientId, date: todayISO(), amount: plan.price, plan: plan.name }],
-    }));
-    toast(`تم تجديد اشتراك ${client.name} (${plan.name}) حتى ${fmtDate(newEnd)}`);
-  }, [state.clients, toast]);
+  /* ----- check-ins ----- */
+
+  const addCheckIn = useCallback(
+    (data: Omit<CheckIn, "id" | "ts">) => {
+      const clientName = state.clients.find((x) => x.id === data.clientId)?.name ?? "Check-in";
+      setState((s) => ({
+        ...s,
+        checkIns: [...s.checkIns, { ...data, id: uid(), ts: Date.now() }],
+      }));
+      toast(`Check-in logged for ${clientName} — ${fmtDate(data.date)}`);
+    },
+    [state.clients, toast],
+  );
 
   const resetData = useCallback(() => {
     setState(makeSeed());
-    toast("تمت إعادة البيانات التجريبية من جديد");
+    toast("Demo data restored");
   }, [toast]);
 
   return (
@@ -177,16 +224,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         state,
         toasts,
         toast,
-        dismissToast,
+        dismiss,
         addClient,
         updateClient,
         deleteClient,
-        logWeight,
-        updateNotes,
-        addSession,
-        toggleSession,
-        deleteSession,
-        renew,
+        addExercise,
+        updateExercise,
+        deleteExercise,
+        addPlanItem,
+        updatePlanItem,
+        deletePlanItem,
+        addMeal,
+        updateMeal,
+        deleteMeal,
+        addCheckIn,
         resetData,
       }}
     >
@@ -196,3 +247,4 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 }
 
 export const useApp = () => useContext(Ctx);
+export const startToday = () => todayISO();
