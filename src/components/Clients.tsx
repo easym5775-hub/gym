@@ -5,7 +5,7 @@ import { fmtDate, relDay } from "../lib";
 import { useApp } from "../store";
 import { Avatar, Badge, ConfirmModal, EmptyState, SectionCard, btnGhost, btnVolt, inputCls } from "./ui";
 import { ClientFormModal } from "./modals";
-import { IconClipboard, IconPencil, IconPlus, IconSearch, IconTrash, IconUsers, IconUtensils } from "../icons";
+import { IconClipboard, IconPencil, IconPlus, IconSearch, IconTrash, IconUser, IconUsers, IconUtensils } from "../icons";
 
 export function ClientsView({ go }: { go: (v: CoachView, id?: string) => void }) {
   const { state, deleteClient } = useApp();
@@ -107,13 +107,17 @@ export function ClientsView({ go }: { go: (v: CoachView, id?: string) => void })
                   return (
                     <tr key={c.id} className="group border-b border-night-700/60 transition last:border-0 hover:bg-night-800/50">
                       <td className="px-5 py-3">
-                        <div className="flex items-center gap-3">
+                        <button
+                          className="flex w-full cursor-pointer items-center gap-3 rounded-lg text-start transition hover:opacity-80"
+                          onClick={() => go("client", c.id)}
+                          title="Open client profile"
+                        >
                           <Avatar name={c.name} photo={c.photo} className="h-10 w-10 text-xs" />
                           <div className="min-w-0">
-                            <p className="truncate font-bold text-mist-100">{c.name}</p>
+                            <p className="truncate font-bold text-mist-100 group-hover:text-volt-300">{c.name}</p>
                             <p className="truncate text-[11px] text-mist-500">{c.email || c.phone || "—"}</p>
                           </div>
-                        </div>
+                        </button>
                       </td>
                       <td className="px-4 py-3">
                         <Badge className={GOAL_META[c.goal].chip}>
@@ -140,6 +144,13 @@ export function ClientsView({ go }: { go: (v: CoachView, id?: string) => void })
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1 opacity-60 transition group-hover:opacity-100">
+                          <button
+                            className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-mist-400 transition hover:bg-night-700 hover:text-volt-300"
+                            title="Open profile"
+                            onClick={() => go("client", c.id)}
+                          >
+                            <IconUser className="h-4 w-4" />
+                          </button>
                           <button
                             className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-mist-400 transition hover:bg-night-700 hover:text-volt-300"
                             title="Workout plan"

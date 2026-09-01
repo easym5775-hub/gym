@@ -76,7 +76,8 @@ export function CoachShell({
         <Logo />
         <nav className="flex flex-col gap-1 px-3">
           {NAV.map((item) => {
-            const active = view === item.id;
+            const active =
+              view === item.id || (item.id === "clients" && view === "client");
             return (
               <button
                 key={item.id}
@@ -147,7 +148,9 @@ export function CoachShell({
                 key={item.id}
                 onClick={() => setView(item.id)}
                 className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-bold transition ${
-                  view === item.id ? "bg-volt-400 text-night-950" : "bg-night-800 text-mist-400 hover:text-mist-100"
+                  view === item.id || (item.id === "clients" && view === "client")
+                    ? "bg-volt-400 text-night-950"
+                    : "bg-night-800 text-mist-400 hover:text-mist-100"
                 }`}
               >
                 {item.label}

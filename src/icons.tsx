@@ -37,6 +37,13 @@ export const IconUsers = (p: P) => (
   </svg>
 );
 
+export const IconUser = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
 export const IconClipboard = (p: P) => (
   <svg {...base(p)}>
     <rect x="8" y="2" width="8" height="4" rx="1" />
