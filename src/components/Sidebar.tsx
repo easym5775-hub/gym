@@ -8,9 +8,11 @@ import {
   IconGrid,
   IconLibrary,
   IconLogOut,
+  IconSettings,
   IconUtensils,
   IconUsers,
 } from "../icons";
+import { SyncIndicator } from "./SyncIndicator";
 
 const NAV: { id: CoachView; label: string; icon: (p: { className?: string }) => ReactNode }[] = [
   { id: "dashboard", label: "Dashboard", icon: IconGrid },
@@ -19,6 +21,7 @@ const NAV: { id: CoachView; label: string; icon: (p: { className?: string }) => 
   { id: "meals", label: "Meals", icon: IconUtensils },
   { id: "library", label: "Exercise Library", icon: IconLibrary },
   { id: "checkins", label: "Check-ins", icon: IconCamera },
+  { id: "settings", label: "Settings", icon: IconSettings },
 ];
 
 function Logo() {
@@ -46,8 +49,23 @@ export function CoachShell({
   onLogout: () => void;
   children: ReactNode;
 }) {
-  const { state } = useApp();
+  const { state, conn, sync } = useApp();
   const pending = state.checkIns.filter((c) => c.date >= todayMinus(6)).length;
+
+  const dbLabel = !conn
+    ? "Local storage"
+    : sync.status === "error"
+      ? "Sheets · error"
+      : sync.status === "syncing"
+        ? "Sheets · syncing"
+        : "Google Sheets";
+  const dbDot = !conn
+    ? "bg-mist-500"
+    : sync.status === "error"
+      ? "bg-danger-400"
+      : sync.status === "syncing"
+        ? "bg-sky-400 tick-pulse"
+        : "bg-volt-400";
 
   return (
     <div className="relative flex min-h-screen">
@@ -93,6 +111,14 @@ export function CoachShell({
             </div>
           </div>
           <button
+            onClick={() => setView("settings")}
+            className="mt-2.5 flex w-full cursor-pointer items-center gap-2 rounded-lg border border-night-600 px-2.5 py-1.5 text-[11px] font-bold text-mist-300 transition hover:border-night-500 hover:text-mist-100"
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${dbDot}`} />
+            {dbLabel}
+            <IconSettings className="ms-auto h-3.5 w-3.5 text-mist-500" />
+          </button>
+          <button
             onClick={onLogout}
             className="mt-2.5 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-night-600 py-1.5 text-[11px] font-bold text-mist-400 transition hover:border-night-500 hover:text-mist-100"
           >
@@ -132,6 +158,8 @@ export function CoachShell({
 
         <main className="relative z-10 mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
       </div>
+
+      <SyncIndicator onOpenSettings={() => setView("settings")} />
     </div>
   );
 }

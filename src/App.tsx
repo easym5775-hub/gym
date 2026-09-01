@@ -10,6 +10,7 @@ import { PlansView } from "./components/Schedule";
 import { MealsView } from "./components/Payments";
 import { LibraryView } from "./components/Library";
 import { CheckInsView } from "./components/ClientDetails";
+import { SettingsView } from "./components/SettingsView";
 import { ClientApp } from "./components/ClientApp";
 
 type Session = { role: "coach" } | { role: "client"; clientId: string } | null;
@@ -53,6 +54,7 @@ function Root() {
         {view === "meals" && <MealsView presetClientId={mealPreset} />}
         {view === "library" && <LibraryView />}
         {view === "checkins" && <CheckInsView />}
+        {view === "settings" && <SettingsView />}
       </CoachShell>
       <Toasts />
     </>

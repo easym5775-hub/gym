@@ -2,7 +2,7 @@ export type Goal = "Lose weight" | "Build muscle" | "General fitness";
 export type ClientStatus = "Active" | "Paused" | "Completed";
 export type ExerciseCategory = "Chest" | "Back" | "Legs" | "Arms" | "Core" | "Cardio";
 export type MealType = "Breakfast" | "Lunch" | "Dinner" | "Snack";
-export type CoachView = "dashboard" | "clients" | "plans" | "meals" | "library" | "checkins";
+export type CoachView = "dashboard" | "clients" | "plans" | "meals" | "library" | "checkins" | "settings";
 
 /* ---------- tables ---------- */
 
