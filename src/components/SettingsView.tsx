@@ -1,26 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useApp } from "../store";
-import { spreadsheetId } from "../services/googleSheets";
-import { errorMessage, type ConnectionConfig } from "../services/dataProvider";
+import { errorMessage } from "../services/dataProvider";
 import { TAB_NAMES } from "../services/googleSheets";
-import {
-  Avatar,
-  ConfirmModal,
-  SectionCard,
-  btnDanger,
-  btnGhost,
-  btnVolt,
-  inputCls,
-  labelCls,
-} from "./ui";
-import {
-  IconCheck,
-  IconCopy,
-  IconDatabase,
-  IconExternal,
-  IconLink,
-  IconRefresh,
-} from "../icons";
+import { Avatar, ConfirmModal, SectionCard, btnDanger, btnGhost, btnVolt, inputCls, labelCls } from "./ui";
+import { IconDatabase, IconExternal, IconLink, IconRefresh, IconChevronLeft } from "../icons";
 
 const fmtSync = (iso: string | null) =>
   iso
@@ -33,27 +16,68 @@ const fmtSync = (iso: string | null) =>
       })
     : "Never";
 
-export function SettingsView() {
-  const { conn, sync, lastSync, connect, disconnect, testConnection, syncNow, toast } = useApp();
+const DRAFT_KEY = "forge-oauth-draft-v1";
 
-  const [webAppUrl, setWebAppUrl] = useState(conn?.webAppUrl ?? "");
-  const [sheetUrl, setSheetUrl] = useState(conn?.sheetUrl ?? "");
-  const [coachId, setCoachId] = useState(conn?.coachId ?? "coach-dana");
-  const [token, setToken] = useState(conn?.token ?? "");
-  const [busy, setBusy] = useState<"connect" | "test" | null>(null);
+interface Draft {
+  clientId: string;
+  coachId: string;
+  mode: "new" | "existing";
+  sheetUrl: string;
+}
+
+function loadDraft(): Draft {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (raw) {
+      const d = JSON.parse(raw) as Partial<Draft>;
+      return {
+        clientId: d.clientId ?? "",
+        coachId: d.coachId ?? "coach-dana",
+        mode: d.mode === "existing" ? "existing" : "new",
+        sheetUrl: d.sheetUrl ?? "",
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+  return { clientId: "", coachId: "coach-dana", mode: "new", sheetUrl: "" };
+}
+
+function GoogleG({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 48 48" className={className} aria-hidden>
+      <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z" />
+      <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z" />
+      <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z" />
+      <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z" />
+    </svg>
+  );
+}
+
+export function SettingsView() {
+  const { conn, sync, lastSync, linkGoogle, disconnect, testConnection, syncNow, toast } = useApp();
+
+  const [draft, setDraft] = useState<Draft>(loadDraft);
+  const [busy, setBusy] = useState<"link" | "test" | null>(null);
   const [inlineError, setInlineError] = useState("");
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
-
-  const [guideOpen, setGuideOpen] = useState(false);
-  const [code, setCode] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const connected = !!conn;
-  const statusWord = !conn
-    ? "Not Connected"
-    : sync.status === "error"
-      ? "Connection Error"
-      : "Connected";
+
+  const set = (patch: Partial<Draft>) => {
+    setDraft((d) => {
+      const next = { ...d, ...patch };
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(next));
+      } catch {
+        /* non-fatal */
+      }
+      return next;
+    });
+  };
+
+  const statusWord = !conn ? "Not Connected" : sync.status === "error" ? "Connection Error" : "Connected";
   const dotCls = !conn
     ? "bg-mist-500"
     : sync.status === "error"
@@ -62,31 +86,32 @@ export function SettingsView() {
         ? "bg-sky-400 tick-pulse"
         : "bg-volt-400";
 
-  const buildConfig = (): ConnectionConfig => ({
-    webAppUrl: webAppUrl.trim(),
-    sheetUrl: sheetUrl.trim(),
-    coachId: coachId.trim(),
-    token: token.trim() || undefined,
-  });
-
   const validate = (): string => {
-    if (!webAppUrl.trim()) return "Paste the Apps Script Web App URL (ends in /exec).";
-    if (!/^https:\/\/script\.google(usercontent)?\.com\//i.test(webAppUrl.trim()))
-      return "That doesn't look like an Apps Script Web App URL.";
-    if (!coachId.trim()) return "Enter a Coach ID — it isolates your data.";
+    if (!draft.clientId.trim())
+      return "Enter your Google OAuth Client ID first (one-time setup — see “How it works” below).";
+    if (!/\.apps\.googleusercontent\.com$/.test(draft.clientId.trim()))
+      return "That doesn't look like an OAuth Client ID (it ends in .apps.googleusercontent.com).";
+    if (!draft.coachId.trim()) return "Enter a Coach ID — it isolates your data from other coaches.";
+    if (draft.mode === "existing" && !draft.sheetUrl.trim())
+      return "Paste the Google Sheet URL, or switch to “Create a new sheet”.";
     return "";
   };
 
-  const handleConnect = async () => {
+  const handleLink = async () => {
     const err = validate();
     if (err) {
       setInlineError(err);
       return;
     }
     setInlineError("");
-    setBusy("connect");
+    setBusy("link");
     try {
-      await connect(buildConfig());
+      await linkGoogle({
+        clientId: draft.clientId.trim(),
+        coachId: draft.coachId.trim(),
+        createNew: draft.mode === "new",
+        sheetUrl: draft.sheetUrl,
+      });
     } catch (e) {
       setInlineError(errorMessage(e));
       toast(errorMessage(e), "warn");
@@ -99,7 +124,7 @@ export function SettingsView() {
     setInlineError("");
     setBusy("test");
     try {
-      await testConnection(connected ? undefined : buildConfig());
+      await testConnection();
       toast("Connection OK — Google Sheets is reachable");
     } catch (e) {
       setInlineError(errorMessage(e));
@@ -108,31 +133,6 @@ export function SettingsView() {
       setBusy(null);
     }
   };
-
-  const copyCode = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
-    } catch {
-      toast("Couldn't copy — select the code manually", "warn");
-    }
-  }, [code, toast]);
-
-  // Load the Code.gs artifact when the guide is opened.
-  useEffect(() => {
-    if (!guideOpen || code) return;
-    let alive = true;
-    fetch("/apps-script/Code.gs")
-      .then((r) => (r.ok ? r.text() : Promise.reject(new Error("not found"))))
-      .then((t) => alive && setCode(t))
-      .catch(() => alive && setCode("// Could not load Code.gs — it lives at public/apps-script/Code.gs"));
-    return () => {
-      alive = false;
-    };
-  }, [guideOpen, code]);
-
-  const sheetId = conn ? spreadsheetId(conn.sheetUrl) : null;
 
   return (
     <div>
@@ -156,7 +156,7 @@ export function SettingsView() {
           <dl className="mt-4 space-y-2 text-sm">
             <div className="flex justify-between">
               <dt className="text-mist-500">Coach ID</dt>
-              <dd className="font-mono text-xs text-mist-200">{conn?.coachId ?? coachId}</dd>
+              <dd className="font-mono text-xs text-mist-200">{conn?.coachId ?? draft.coachId}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-mist-500">Storage</dt>
@@ -176,7 +176,11 @@ export function SettingsView() {
           {/* status line */}
           <div className="flex flex-wrap items-center gap-3">
             <span className={`h-2.5 w-2.5 rounded-full ${dotCls}`} />
-            <span className={`font-display text-xl font-semibold uppercase tracking-wide ${!conn ? "text-mist-300" : sync.status === "error" ? "text-danger-300" : "text-volt-300"}`}>
+            <span
+              className={`font-display text-xl font-semibold uppercase tracking-wide ${
+                !conn ? "text-mist-300" : sync.status === "error" ? "text-danger-300" : "text-volt-300"
+              }`}
+            >
               {statusWord}
             </span>
             <span className="text-xs font-semibold text-mist-500">
@@ -190,7 +194,7 @@ export function SettingsView() {
             </span>
           </div>
 
-          {connected ? (
+          {connected && conn ? (
             <div className="mt-4">
               <dl className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-lg border border-night-700 bg-night-800 p-3">
@@ -206,7 +210,7 @@ export function SettingsView() {
                     </a>
                     <IconExternal className="h-3.5 w-3.5 shrink-0 text-mist-500" />
                   </dd>
-                  {sheetId && <p className="mt-1 truncate font-mono text-[10px] text-mist-500">ID: {sheetId}</p>}
+                  <p className="mt-1 truncate font-mono text-[10px] text-mist-500">ID: {conn.spreadsheetId}</p>
                 </div>
                 <div className="rounded-lg border border-night-700 bg-night-800 p-3">
                   <dt className="text-[11px] font-bold uppercase tracking-wider text-mist-500">Last Sync</dt>
@@ -226,7 +230,11 @@ export function SettingsView() {
                   <IconLink className="h-4 w-4" />
                   {busy === "test" ? "Testing…" : "Test Connection"}
                 </button>
-                <button className={`${btnVolt} px-3! py-2! text-xs`} onClick={() => void syncNow()} disabled={sync.status === "syncing"}>
+                <button
+                  className={`${btnVolt} px-3! py-2! text-xs`}
+                  onClick={() => void syncNow()}
+                  disabled={sync.status === "syncing"}
+                >
                   <IconRefresh className="h-4 w-4" />
                   {sync.status === "syncing" ? "Syncing…" : "Sync Now"}
                 </button>
@@ -241,39 +249,66 @@ export function SettingsView() {
             </div>
           ) : (
             <div className="mt-4 grid gap-4">
-              <div>
-                <label className={labelCls}>Apps Script Web App URL *</label>
-                <input
-                  className={inputCls}
-                  placeholder="https://script.google.com/macros/s/…/exec"
-                  value={webAppUrl}
-                  onChange={(e) => setWebAppUrl(e.target.value)}
-                />
-                <p className="mt-1 text-[11px] text-mist-500">The secure API layer deployed on your sheet — never a Google key.</p>
-              </div>
+              {/* The one-time prerequisite */}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className={labelCls}>Google Sheet URL *</label>
+                  <label className={labelCls}>Google OAuth Client ID *</label>
                   <input
                     className={inputCls}
-                    placeholder="https://docs.google.com/spreadsheets/d/…"
-                    value={sheetUrl}
-                    onChange={(e) => setSheetUrl(e.target.value)}
+                    placeholder="….apps.googleusercontent.com"
+                    value={draft.clientId}
+                    onChange={(e) => set({ clientId: e.target.value })}
                   />
                 </div>
                 <div>
                   <label className={labelCls}>Coach ID *</label>
-                  <input className={inputCls} value={coachId} onChange={(e) => setCoachId(e.target.value)} />
+                  <input className={inputCls} value={draft.coachId} onChange={(e) => set({ coachId: e.target.value })} />
                 </div>
               </div>
+
+              {/* Which sheet to use */}
               <div>
-                <label className={labelCls}>Access token (optional)</label>
-                <input
-                  className={inputCls}
-                  placeholder="Only if you set ACCESS_TOKEN in Script Properties"
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
-                />
+                <label className={labelCls}>Spreadsheet</label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button
+                    onClick={() => set({ mode: "new" })}
+                    className={`cursor-pointer rounded-lg border p-3 text-start transition ${
+                      draft.mode === "new"
+                        ? "border-volt-400 bg-volt-400/10"
+                        : "border-night-600 bg-night-800 hover:border-night-500"
+                    }`}
+                  >
+                    <span className={`block text-sm font-bold ${draft.mode === "new" ? "text-volt-300" : "text-mist-200"}`}>
+                      Create a new sheet
+                    </span>
+                    <span className="mt-0.5 block text-[11px] leading-4 text-mist-500">
+                      A fresh “FORGE — Gym Database” spreadsheet is created and set up automatically.
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => set({ mode: "existing" })}
+                    className={`cursor-pointer rounded-lg border p-3 text-start transition ${
+                      draft.mode === "existing"
+                        ? "border-volt-400 bg-volt-400/10"
+                        : "border-night-600 bg-night-800 hover:border-night-500"
+                    }`}
+                  >
+                    <span className={`block text-sm font-bold ${draft.mode === "existing" ? "text-volt-300" : "text-mist-200"}`}>
+                      Use an existing sheet
+                    </span>
+                    <span className="mt-0.5 block text-[11px] leading-4 text-mist-500">
+                      Point the database at a spreadsheet you already own.
+                    </span>
+                  </button>
+                </div>
+                {draft.mode === "existing" && (
+                  <input
+                    className={`${inputCls} mt-2`}
+                    placeholder="https://docs.google.com/spreadsheets/d/…"
+                    value={draft.sheetUrl}
+                    onChange={(e) => set({ sheetUrl: e.target.value })}
+                  />
+                )}
               </div>
 
               {inlineError && (
@@ -282,60 +317,67 @@ export function SettingsView() {
                 </p>
               )}
 
-              <div className="flex flex-wrap gap-2">
-                <button className={`${btnVolt}`} onClick={handleConnect} disabled={busy === "connect"}>
-                  <IconDatabase className="h-4 w-4" />
-                  {busy === "connect" ? "Connecting…" : "Connect Google Sheet"}
-                </button>
-                <button className={btnGhost} onClick={handleTest} disabled={busy === "test"}>
-                  <IconLink className="h-4 w-4" />
-                  {busy === "test" ? "Testing…" : "Test Connection"}
-                </button>
-              </div>
+              {/* The OAuth button */}
+              <button
+                onClick={handleLink}
+                disabled={busy === "link"}
+                className="inline-flex h-12 cursor-pointer items-center justify-center gap-3 rounded-lg bg-white px-5 text-sm font-bold text-night-900 shadow-sm transition hover:bg-mist-100 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <GoogleG />
+                {busy === "link" ? "Waiting for Google…" : "Link with Google"}
+              </button>
+              <p className="-mt-2 text-[11px] leading-4 text-mist-500">
+                Google will ask you to sign in and allow FORGE to read &amp; write <em>your</em> spreadsheets. Nothing is
+                shared publicly and you can revoke access any time from your Google account.
+              </p>
             </div>
           )}
         </SectionCard>
       </div>
 
-      {/* Setup guide */}
+      {/* How it works */}
       <SectionCard
-        title="Setup guide"
-        icon={<IconDatabase className="h-5 w-5" />}
+        title="How it works"
+        icon={<IconLink className="h-5 w-5" />}
         delay={180}
         className="mt-4"
         bodyCls="p-5"
         action={
-          <button className={`${btnGhost} px-3! py-1.5! text-xs`} onClick={() => setGuideOpen((v) => !v)}>
-            {guideOpen ? "Hide" : "Show"} guide
+          <button className={`${btnGhost} px-3! py-1.5! text-xs`} onClick={() => setHelpOpen((v) => !v)}>
+            <IconChevronLeft className={`h-3.5 w-3.5 transition-transform ${helpOpen ? "-rotate-90" : "rotate-90"}`} />
+            {helpOpen ? "Hide" : "Show"}
           </button>
         }
       >
-        {guideOpen && (
-          <div className="animate-fade">
+        {helpOpen && (
+          <div className="animate-fade grid gap-4 lg:grid-cols-2">
             <ol className="list-decimal space-y-1.5 pl-5 text-sm leading-6 text-mist-300">
-              <li>Create (or open) the Google Sheet you want to use as the database.</li>
-              <li>Go to <strong className="text-mist-100">Extensions → Apps Script</strong>, delete the placeholder, paste the code below.</li>
               <li>
-                <strong className="text-mist-100">Deploy → New deployment → Web app</strong>: “Execute as: Me”, “Who has access: Anyone”. Copy the <em>/exec</em> URL.
+                In <strong className="text-mist-100">Google Cloud Console</strong>, create a project, enable the{" "}
+                <strong className="text-mist-100">Google Sheets API</strong>, then create an{" "}
+                <strong className="text-mist-100">OAuth client ID</strong> (type: Web application).
               </li>
-              <li>Paste that URL and the sheet URL above, pick a Coach ID, then <strong className="text-mist-100">Connect</strong>. The 16 tabs are created automatically without touching existing data.</li>
+              <li>
+                Add this site's address to the client's <strong className="text-mist-100">Authorised JavaScript origins</strong>.
+              </li>
+              <li>Copy the Client ID into the field above, pick a Coach ID, then press{" "}
+                <strong className="text-mist-100">Link with Google</strong> and approve the consent screen.</li>
+              <li>
+                The 16 database tabs are created automatically (existing data is never touched) and your data syncs both
+                ways from then on.
+              </li>
             </ol>
-            <div className="mt-4 overflow-hidden rounded-lg border border-night-700">
-              <div className="flex items-center justify-between border-b border-night-700 bg-night-800 px-3 py-2">
-                <span className="font-mono text-xs text-mist-400">apps-script/Code.gs</span>
-                <div className="flex items-center gap-2">
-                  <a href="/apps-script/Code.gs" download className="text-[11px] font-bold text-volt-300 hover:underline">
-                    Download
-                  </a>
-                  <button onClick={copyCode} className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-night-700 px-2 py-1 text-[11px] font-bold text-mist-200 transition hover:bg-night-600">
-                    {copied ? <IconCheck className="h-3.5 w-3.5 text-volt-300" /> : <IconCopy className="h-3.5 w-3.5" />}
-                    {copied ? "Copied" : "Copy"}
-                  </button>
-                </div>
-              </div>
-              <pre className="max-h-72 overflow-auto bg-night-900 p-4 font-mono text-[11px] leading-5 text-mist-300">
-                {code || "// Loading Code.gs…"}
-              </pre>
+            <div className="rounded-lg border border-night-700 bg-night-800 p-4 text-xs leading-5 text-mist-400">
+              <p className="font-bold text-mist-200">Security</p>
+              <p className="mt-1.5">
+                No API key, service-account key or OAuth secret ever lives in this app. A Client ID is public by design;
+                the access token is short-lived, scoped to your spreadsheets, granted by you, and revocable from{" "}
+                <span className="text-mist-200">Google → Security → Third-party access</span>.
+              </p>
+              <p className="mt-2">
+                Every record carries your <span className="text-mist-200">Coach ID</span>, so one coach can never read or
+                write another coach's clients or data.
+              </p>
             </div>
           </div>
         )}
@@ -345,7 +387,7 @@ export function SettingsView() {
         open={confirmDisconnect}
         onClose={() => setConfirmDisconnect(false)}
         title="Disconnect Google Sheets?"
-        message="New changes will only be saved on this device until you reconnect. Your spreadsheet is left untouched."
+        message="New changes will only be saved on this device until you link again. Your spreadsheet is left untouched."
         confirmLabel="Disconnect"
         onConfirm={disconnect}
       />

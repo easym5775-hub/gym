@@ -1,18 +1,26 @@
 import type { CheckIn, Client, Exercise, Meal, PlanItem } from "../types";
-import type {
-  ConnectionConfig,
-  DataProvider,
-  EntityOp,
-  RemoteData,
-} from "./dataProvider";
+import type { ConnectionConfig, DataProvider, EntityOp, RemoteData } from "./dataProvider";
+import {
+  getMetadata,
+  initTabs,
+  readRecords,
+  removeRow,
+  removeWhere,
+  spreadsheetIdFrom,
+  upsertRow,
+  type Row,
+} from "./googleSheetsApi";
 
 /**
  * GoogleSheetsProvider
  * --------------------
- * React never talks to Google directly. Every request goes to a Google Apps
- * Script Web App (the secure API layer the coach deploys on their sheet), which
- * in turn reads/writes the spreadsheet. No Google credentials, API keys or
- * private keys ever reach the frontend — only the Web App URL the coach pastes.
+ * Talks to Google Sheets through the Sheets API v4 using the coach's OAuth
+ * access token (obtained via the "Link with Google" consent flow). No secret
+ * ever reaches the frontend — the OAuth client id is public by design and the
+ * access token is short-lived, scoped and granted by the coach.
+ *
+ * Every record carries a `coach_id`; reads and writes here are always scoped to
+ * the connected coach, so one coach can never touch another coach's data.
  */
 
 /* ------------------------------------------------------------------ */
@@ -56,8 +64,6 @@ const ENTITY_SHEET: Record<EntityOp["entity"], string> = {
 /* ------------------------------------------------------------------ */
 /* Mappers: app entity <-> sheet row (adds coach_id + audit fields).   */
 /* ------------------------------------------------------------------ */
-
-type Row = Record<string, string | number | boolean>;
 
 /** Sheets cells cap at 50k chars; drop oversized base64 photos so a write never fails. */
 const safePhoto = (p?: string) => (p && p.length < 45000 ? p : "");
@@ -194,86 +200,53 @@ const toUpsertRow = (op: Extract<EntityOp, { type: "upsert" }>): Row => {
 };
 
 /* ------------------------------------------------------------------ */
-/* Transport — call the Apps Script Web App.                           */
-/* ------------------------------------------------------------------ */
-
-function endpoint(cfg: ConnectionConfig): string {
-  return cfg.webAppUrl.trim().replace(/\/$/, "");
-}
-
-async function get(cfg: ConnectionConfig, params: Record<string, string>): Promise<unknown> {
-  const qs = new URLSearchParams({ coach: cfg.coachId, ...(cfg.token ? { token: cfg.token } : {}), ...params });
-  const res = await fetch(`${endpoint(cfg)}?${qs.toString()}`, { redirect: "follow" });
-  return parse(res);
-}
-
-async function post(cfg: ConnectionConfig, payload: Record<string, unknown>): Promise<unknown> {
-  const body = JSON.stringify({ coach: cfg.coachId, token: cfg.token ?? "", ...payload });
-  // text/plain avoids a CORS preflight, which Apps Script does not answer.
-  const res = await fetch(endpoint(cfg), {
-    method: "POST",
-    redirect: "follow",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body,
-  });
-  return parse(res);
-}
-
-async function parse(res: Response): Promise<unknown> {
-  if (!res.ok) throw new Error(`Request failed (HTTP ${res.status})`);
-  let json: { ok?: boolean; error?: string } & Record<string, unknown>;
-  try {
-    json = (await res.json()) as { ok?: boolean; error?: string } & Record<string, unknown>;
-  } catch {
-    throw new Error("The endpoint did not return JSON. Check the Web App URL.");
-  }
-  if (!json.ok) throw new Error(String(json.error ?? "Google Sheets request failed"));
-  return json;
-}
-
-/* ------------------------------------------------------------------ */
-/* Provider implementation.                                            */
+/* Provider implementation (OAuth + Sheets API v4).                    */
 /* ------------------------------------------------------------------ */
 
 export const googleSheetsProvider: DataProvider = {
   kind: "google-sheets",
 
   async ping(cfg) {
-    await get(cfg, { action: "ping" });
+    // A successful metadata read proves the token works and the sheet is reachable.
+    await getMetadata(cfg);
   },
 
   async init(cfg) {
-    const json = (await get(cfg, { action: "init" })) as { sheets?: string[] };
-    return json.sheets ?? TAB_NAMES;
+    return initTabs(cfg, SCHEMA);
   },
 
   async load(cfg) {
-    const json = (await get(cfg, { action: "load" })) as { data?: Record<string, Row[]> };
-    const d = json.data ?? {};
-    const rows = (sheet: string) => d[sheet] ?? [];
+    const [clients, exercises, plans, checkIns, meals] = await Promise.all([
+      readRecords(cfg, "Clients"),
+      readRecords(cfg, "Exercises"),
+      readRecords(cfg, "WorkoutPlans"),
+      readRecords(cfg, "CheckIns"),
+      readRecords(cfg, "Meals"),
+    ]);
     return {
-      clients: rows("Clients").map(rowToClient),
-      exercises: rows("Exercises").map(rowToExercise),
-      plans: rows("WorkoutPlans").map(rowToPlan),
-      checkIns: rows("CheckIns").map(rowToCheckIn),
-      meals: rows("Meals").map(rowToMeal),
+      clients: clients.map(rowToClient),
+      exercises: exercises.map(rowToExercise),
+      plans: plans.map(rowToPlan),
+      checkIns: checkIns.map(rowToCheckIn),
+      meals: meals.map(rowToMeal),
     } satisfies RemoteData;
   },
 
   async apply(cfg, ops) {
-    if (ops.length === 0) return;
-    const wire = ops.map((op) => {
+    for (const op of ops) {
       const sheet = ENTITY_SHEET[op.entity];
-      if (op.type === "upsert") return { type: "upsert", sheet, row: toUpsertRow(op) };
-      if (op.type === "remove") return { type: "remove", sheet, id: op.id };
-      return { type: "removeWhere", sheet, field: FIELD_MAP[op.field] ?? op.field, value: op.value };
-    });
-    await post(cfg, { action: "apply", ops: wire });
+      if (op.type === "upsert") {
+        await upsertRow(cfg, sheet, toUpsertRow(op));
+      } else if (op.type === "remove") {
+        await removeRow(cfg, sheet, op.id);
+      } else {
+        await removeWhere(cfg, sheet, FIELD_MAP[op.field] ?? op.field, op.value);
+      }
+    }
   },
 };
 
-/** Derive a stable spreadsheet id from the sheet URL (for display / deep links). */
+/** Derive a stable spreadsheet id from a sheet URL or bare id. */
 export function spreadsheetId(sheetUrl: string): string | null {
-  const m = sheetUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  return m ? m[1] : null;
+  return spreadsheetIdFrom(sheetUrl);
 }

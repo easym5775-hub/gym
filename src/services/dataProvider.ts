@@ -12,14 +12,18 @@ import type { CheckIn, Client, Exercise, Meal, PlanItem } from "../types";
 export type SyncStatus = "local" | "idle" | "syncing" | "error";
 
 export interface ConnectionConfig {
-  /** Google Apps Script Web App URL — the secure API layer in front of the sheet. */
-  webAppUrl: string;
-  /** The spreadsheet URL (used for "Open Google Sheet" + deriving the ID). */
+  /**
+   * Google OAuth 2.0 Client ID (web application). Public by design — it is NOT
+   * a secret. The access token it yields is short-lived, scoped to the coach's
+   * spreadsheets and granted through Google's consent screen.
+   */
+  clientId: string;
+  /** The spreadsheet that acts as the database. */
+  spreadsheetId: string;
+  /** Full spreadsheet URL (used for "Open Google Sheet"). */
   sheetUrl: string;
   /** Identity used to isolate this coach's rows (every record carries coach_id). */
   coachId: string;
-  /** Optional access token checked against an Apps Script Script Property. */
-  token?: string;
 }
 
 export interface SyncInfo {

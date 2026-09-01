@@ -2,8 +2,8 @@ import type { ConnectionConfig } from "./dataProvider";
 
 /**
  * Connection metadata lives in its own localStorage key, separate from the data
- * cache. Only the Web App URL, sheet URL, coach id and an optional app token are
- * stored — never any Google credential.
+ * cache. It stores only the OAuth client id, the spreadsheet id/url and the
+ * coach id — never a secret and never the (short-lived, in-memory) access token.
  */
 
 const CONN_KEY = "forge-conn-v1";

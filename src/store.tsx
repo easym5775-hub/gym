@@ -13,6 +13,8 @@ import { makeSeed } from "./seed";
 import type { ConnectionConfig, EntityOp, RemoteData, SyncInfo } from "./services/dataProvider";
 import { errorMessage } from "./services/dataProvider";
 import { googleSheetsProvider } from "./services/googleSheets";
+import { clearToken, linkWithGoogle } from "./services/googleOAuth";
+import { createSpreadsheet, spreadsheetIdFrom } from "./services/googleSheetsApi";
 import {
   clearStoredConnection,
   loadStoredConnection,
@@ -58,9 +60,16 @@ interface Store {
   conn: ConnectionConfig | null;
   sync: SyncInfo;
   lastSync: string | null;
-  connect: (cfg: ConnectionConfig) => Promise<void>;
+  /** OAuth "Link with Google" flow — consent, (optionally) create a sheet, init, load. */
+  linkGoogle: (opts: {
+    clientId: string;
+    coachId: string;
+    /** When true a brand-new spreadsheet is created; otherwise `sheetUrl` is used. */
+    createNew?: boolean;
+    sheetUrl?: string;
+  }) => Promise<ConnectionConfig>;
   disconnect: () => void;
-  testConnection: (cfg?: ConnectionConfig) => Promise<void>;
+  testConnection: () => Promise<void>;
   syncNow: () => Promise<void>;
 }
 
@@ -111,6 +120,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const debounceRef = useRef<number | null>(null);
   const retryRef = useRef<number | null>(null);
   const bootedRef = useRef(false);
+  /** Latest state, readable inside async flows without stale closures. */
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   /* ---- local cache (unchanged behaviour — always on) ---- */
   useEffect(() => {
@@ -247,32 +261,76 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   /* ---- public connection actions ---- */
 
-  const connect = useCallback(
-    async (cfg: ConnectionConfig) => {
+  const linkGoogle = useCallback(
+    async (opts: { clientId: string; coachId: string; createNew?: boolean; sheetUrl?: string }) => {
       markSync({ status: "syncing", error: null });
-      await googleSheetsProvider.ping(cfg);
+
+      // 1. Explicit OAuth consent — the "Link with Google" moment.
+      await linkWithGoogle(opts.clientId);
+
+      // 2. Pick (or create) the spreadsheet that becomes the database.
+      let spreadsheetId: string;
+      let sheetUrl: string;
+      if (opts.createNew) {
+        const created = await createSpreadsheet(opts.clientId, "FORGE — Gym Database");
+        spreadsheetId = created.spreadsheetId;
+        sheetUrl = created.spreadsheetUrl;
+      } else {
+        sheetUrl = (opts.sheetUrl ?? "").trim();
+        const id = spreadsheetIdFrom(sheetUrl);
+        if (!id) throw new Error("That doesn't look like a valid Google Sheet URL.");
+        spreadsheetId = id;
+      }
+
+      const cfg: ConnectionConfig = {
+        clientId: opts.clientId,
+        coachId: opts.coachId,
+        spreadsheetId,
+        sheetUrl: sheetUrl || `https://docs.google.com/spreadsheets/d/${spreadsheetId}`,
+      };
+
+      // 3. Create any missing tabs/headers (existing data is never touched).
       await googleSheetsProvider.init(cfg);
-      persistConn(cfg, null);
+
+      // 4. Load existing records and merge by unique id (no duplicates).
       const remote = await googleSheetsProvider.load(cfg);
       mergeRemote(remote);
+
+      // 5. Push local-only records up so a fresh sheet gets populated.
+      const remoteIds = new Set<string>([
+        ...remote.clients,
+        ...remote.exercises,
+        ...remote.plans,
+        ...remote.checkIns,
+        ...remote.meals,
+      ].map((r) => r.id));
+      const s = stateRef.current;
+      for (const c of s.clients) if (!remoteIds.has(c.id)) enqueue({ type: "upsert", entity: "client", record: c });
+      for (const e of s.exercises) if (!remoteIds.has(e.id)) enqueue({ type: "upsert", entity: "exercise", record: e });
+      for (const p of s.plans) if (!remoteIds.has(p.id)) enqueue({ type: "upsert", entity: "plan", record: p });
+      for (const ci of s.checkIns) if (!remoteIds.has(ci.id)) enqueue({ type: "upsert", entity: "checkin", record: ci });
+      for (const m of s.meals) if (!remoteIds.has(m.id)) enqueue({ type: "upsert", entity: "meal", record: m });
+
       const nowIso = new Date().toISOString();
       persistConn(cfg, nowIso);
-      markSync({ status: "idle", error: null, lastSync: nowIso });
-      toast("Google Sheets connected — database initialised");
+      markSync({ status: queueRef.current.length ? "syncing" : "idle", error: null, lastSync: nowIso });
+      toast("Linked with Google — your data now lives in the sheet");
+      return cfg;
     },
-    [markSync, mergeRemote, persistConn, toast],
+    [enqueue, markSync, mergeRemote, persistConn, toast],
   );
 
   const disconnect = useCallback(() => {
     queueRef.current = [];
+    clearToken();
     persistConn(null, null);
     markSync({ status: "local", error: null, lastSync: null });
-    toast("Disconnected — your data stays saved on this device", "warn");
+    toast("Unlinked — your data stays saved on this device", "warn");
   }, [markSync, persistConn, toast]);
 
-  const testConnection = useCallback(async (cfg?: ConnectionConfig) => {
-    const target = cfg ?? connRef.current;
-    if (!target) throw new Error("No connection to test");
+  const testConnection = useCallback(async () => {
+    const target = connRef.current;
+    if (!target) throw new Error("No Google account linked yet");
     await googleSheetsProvider.ping(target);
   }, []);
 
@@ -466,7 +524,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         conn: stored.config,
         sync,
         lastSync: stored.lastSync,
-        connect,
+        linkGoogle,
         disconnect,
         testConnection,
         syncNow,
