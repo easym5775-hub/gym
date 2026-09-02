@@ -1,0 +1,228 @@
+/* ================================================================
+   FORGE — data model + visual metadata
+   ================================================================ */
+
+export type Goal = "Lose weight" | "Build muscle" | "General fitness";
+export type ClientStatus = "Active" | "Paused" | "Completed";
+export type ExerciseCategory = "Chest" | "Back" | "Legs" | "Arms" | "Core" | "Cardio";
+export type MealType = "Breakfast" | "Lunch" | "Dinner" | "Snack";
+export type SessionStatus = "Scheduled" | "Confirmed" | "Completed" | "Missed" | "Cancelled";
+export type PaymentMethod = "Cash" | "Card" | "Bank Transfer" | "Other";
+export type PaymentStatus = "Paid" | "Pending";
+export type SubscriptionPaymentStatus = "Paid" | "Pending" | "Partial";
+export type SubState = "Active" | "Expiring Soon" | "Expired" | "No Subscription";
+
+export type CoachView =
+  | "dashboard"
+  | "clients"
+  | "client"
+  | "plans"
+  | "meals"
+  | "library"
+  | "checkins"
+  | "settings";
+
+/* ---------------- entities ---------------- */
+
+export interface CoachNote {
+  id: string;
+  text: string;
+  createdAt: number;
+}
+
+export interface NutritionTargets {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+  water: number;
+}
+
+export interface Client {
+  id: string; // = the client's Supabase auth user id
+  coachId: string;
+  username: string;
+  name: string;
+  email: string;
+  phone: string;
+  gender?: "Male" | "Female" | "Other";
+  age?: number;
+  goal: Goal;
+  startDate: string;
+  status: ClientStatus;
+  notes: string;
+  photo?: string;
+  followUpDays?: number;
+  lastFollowUp?: string;
+  coachNotes?: CoachNote[];
+  nutritionTargets?: NutritionTargets;
+}
+
+export interface Exercise {
+  id: string;
+  coachId: string;
+  name: string;
+  category: ExerciseCategory;
+  description: string;
+  videoUrl: string;
+  image?: string;
+}
+
+export interface PlanItem {
+  id: string;
+  coachId: string;
+  clientId: string;
+  day: number; // 1..7 (Day 1 = Monday)
+  exerciseId: string;
+  sets: number;
+  reps: number;
+  rest: number;
+  notes: string;
+}
+
+export interface CheckIn {
+  id: string;
+  coachId: string;
+  clientId: string;
+  date: string;
+  ts: number;
+  weight: number;
+  waist?: number;
+  mood: number; // 1..5
+  water: number;
+  workoutDone: boolean;
+  notes?: string;
+  photo?: string;
+}
+
+export interface Meal {
+  id: string;
+  coachId: string;
+  clientId: string;
+  type: MealType;
+  description: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+}
+
+export interface Subscription {
+  id: string;
+  coachId: string;
+  clientId: string;
+  planName: string;
+  startDate: string;
+  endDate: string;
+  price: number;
+  paymentStatus: SubscriptionPaymentStatus;
+  createdAt: number;
+}
+
+export interface Payment {
+  id: string;
+  coachId: string;
+  clientId: string;
+  subscriptionId?: string;
+  amount: number;
+  date: string;
+  method: PaymentMethod;
+  status: PaymentStatus;
+  notes: string;
+}
+
+export interface Session {
+  id: string;
+  coachId: string;
+  clientId: string;
+  date: string;
+  time: string;
+  type: string;
+  status: SessionStatus;
+  notes: string;
+}
+
+export interface AppState {
+  clients: Client[];
+  exercises: Exercise[];
+  plans: PlanItem[];
+  checkIns: CheckIn[];
+  meals: Meal[];
+  subscriptions: Subscription[];
+  payments: Payment[];
+  sessions: Session[];
+}
+
+/* ---------------- constants ---------------- */
+
+export const GOALS: Goal[] = ["Lose weight", "Build muscle", "General fitness"];
+export const STATUSES: ClientStatus[] = ["Active", "Paused", "Completed"];
+export const CATEGORIES: ExerciseCategory[] = ["Chest", "Back", "Legs", "Arms", "Core", "Cardio"];
+export const MEAL_TYPES: MealType[] = ["Breakfast", "Lunch", "Dinner", "Snack"];
+export const SESSION_STATUSES: SessionStatus[] = ["Scheduled", "Confirmed", "Completed", "Missed", "Cancelled"];
+export const PAYMENT_METHODS: PaymentMethod[] = ["Cash", "Card", "Bank Transfer", "Other"];
+export const WEEK_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+export const WEEK_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+export const FOLLOW_UP_PRESETS = [1, 3, 7, 14];
+
+/* ---------------- visual meta ---------------- */
+
+export const GOAL_META: Record<Goal, { chip: string; dot: string; bar: string }> = {
+  "Lose weight": {
+    chip: "border-warn-400/25 bg-warn-400/10 text-warn-300",
+    dot: "bg-warn-400",
+    bar: "bg-warn-400",
+  },
+  "Build muscle": {
+    chip: "border-volt-400/25 bg-volt-400/10 text-volt-300",
+    dot: "bg-volt-400",
+    bar: "bg-volt-400",
+  },
+  "General fitness": {
+    chip: "border-moss-400/25 bg-moss-400/10 text-moss-300",
+    dot: "bg-moss-400",
+    bar: "bg-moss-400",
+  },
+};
+
+export const STATUS_META: Record<ClientStatus, { chip: string; dot: string }> = {
+  Active: { chip: "border-volt-400/25 bg-volt-400/10 text-volt-300", dot: "bg-volt-400" },
+  Paused: { chip: "border-warn-400/25 bg-warn-400/10 text-warn-300", dot: "bg-warn-400" },
+  Completed: { chip: "border-night-500/60 bg-night-600/30 text-mist-300", dot: "bg-mist-400" },
+};
+
+export const CAT_META: Record<ExerciseCategory, { chip: string; dot: string; block: string }> = {
+  Chest: { chip: "border-rose-400/25 bg-rose-400/10 text-rose-300", dot: "bg-rose-400", block: "from-rose-500/30" },
+  Back: { chip: "border-sky-400/25 bg-sky-400/10 text-sky-300", dot: "bg-sky-400", block: "from-sky-500/30" },
+  Legs: { chip: "border-amber-400/25 bg-amber-400/10 text-amber-300", dot: "bg-amber-400", block: "from-amber-500/30" },
+  Arms: { chip: "border-orange-400/25 bg-orange-400/10 text-orange-300", dot: "bg-orange-400", block: "from-orange-500/30" },
+  Core: { chip: "border-volt-400/25 bg-volt-400/10 text-volt-300", dot: "bg-volt-400", block: "from-volt-500/30" },
+  Cardio: { chip: "border-red-400/25 bg-red-400/10 text-red-300", dot: "bg-red-400", block: "from-red-500/30" },
+};
+
+export const MEAL_META: Record<MealType, { chip: string; dot: string }> = {
+  Breakfast: { chip: "border-amber-400/25 bg-amber-400/10 text-amber-300", dot: "bg-amber-400" },
+  Lunch: { chip: "border-volt-400/25 bg-volt-400/10 text-volt-300", dot: "bg-volt-400" },
+  Dinner: { chip: "border-teal-400/25 bg-teal-400/10 text-teal-300", dot: "bg-teal-400" },
+  Snack: { chip: "border-rose-400/25 bg-rose-400/10 text-rose-300", dot: "bg-rose-400" },
+};
+
+export const SESSION_STATUS_META: Record<SessionStatus, { chip: string; dot: string }> = {
+  Scheduled: { chip: "border-sky-400/25 bg-sky-400/10 text-sky-300", dot: "bg-sky-400" },
+  Confirmed: { chip: "border-volt-400/25 bg-volt-400/10 text-volt-300", dot: "bg-volt-400" },
+  Completed: { chip: "border-moss-400/25 bg-moss-400/10 text-moss-300", dot: "bg-moss-400" },
+  Missed: { chip: "border-danger-500/25 bg-danger-500/10 text-danger-300", dot: "bg-danger-400" },
+  Cancelled: { chip: "border-night-500/60 bg-night-600/30 text-mist-400", dot: "bg-mist-500" },
+};
+
+export const PAYMENT_STATUS_META: Record<PaymentStatus, { chip: string; dot: string }> = {
+  Paid: { chip: "border-moss-400/25 bg-moss-400/10 text-moss-300", dot: "bg-moss-400" },
+  Pending: { chip: "border-warn-400/25 bg-warn-400/10 text-warn-300", dot: "bg-warn-400" },
+};
+
+export const SUB_STATE_META: Record<SubState, { chip: string; dot: string; bar: string }> = {
+  Active: { chip: "border-moss-400/25 bg-moss-400/10 text-moss-300", dot: "bg-moss-400", bar: "bg-moss-400" },
+  "Expiring Soon": { chip: "border-warn-400/25 bg-warn-400/10 text-warn-300", dot: "bg-warn-400", bar: "bg-warn-400" },
+  Expired: { chip: "border-danger-500/25 bg-danger-500/10 text-danger-300", dot: "bg-danger-400", bar: "bg-danger-400" },
+  "No Subscription": { chip: "border-night-500/60 bg-night-600/30 text-mist-400", dot: "bg-mist-500", bar: "bg-night-500" },
+};

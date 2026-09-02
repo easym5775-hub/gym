@@ -1,5 +1,121 @@
+/* ================================================================
+   FORGE — app root: auth-phase routing + coach navigation.
+   ================================================================ */
+
+import { useState } from "react";
+import { Dumbbell, Loader2 } from "lucide-react";
+import type { CoachView } from "./types";
+import { StoreProvider, useApp } from "./store";
+import { signOut } from "./services/auth";
+import { Toasts } from "./components/ui";
+import { Auth } from "./components/Auth";
+import { CoachShell } from "./components/Shell";
+import { Dashboard } from "./components/Dashboard";
+import { ClientsView, ClientProfile, type Filter } from "./components/Clients";
+import { PlansView, MealsView, LibraryView, CheckInsView } from "./components/Workspaces";
+import { SettingsView } from "./components/Settings";
+import { ClientApp } from "./components/ClientApp";
+
+function Splash({ label }: { label: string }) {
+  return (
+    <div className="relative grid min-h-screen place-items-center">
+      <div className="app-glow pointer-events-none fixed inset-0" />
+      <div className="dot-grid pointer-events-none fixed inset-0" />
+      <div className="rise relative z-10 flex flex-col items-center gap-4">
+        <span className="grid h-14 w-14 place-items-center rounded-xl bg-volt-400 text-night-950 shadow-[0_14px_40px_-12px_rgba(205,241,75,0.6)]">
+          <Dumbbell className="h-8 w-8" strokeWidth={2.2} />
+        </span>
+        <p className="font-display text-2xl font-bold uppercase tracking-wide text-mist-100">Forge</p>
+        <p className="flex items-center gap-2 text-xs font-semibold text-mist-500">
+          <Loader2 className="h-4 w-4 animate-spin text-volt-400" /> {label}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function Root() {
+  const { phase, me } = useApp();
+
+  if (phase === "booting" || phase === "loading") {
+    return (
+      <>
+        <Splash label={phase === "booting" ? "Warming up…" : "Loading your data…"} />
+        <Toasts />
+      </>
+    );
+  }
+
+  if (phase === "signed-out" || !me) {
+    return (
+      <>
+        <Auth />
+        <Toasts />
+      </>
+    );
+  }
+
+  if (me.role === "client") {
+    return (
+      <>
+        <ClientApp onLogout={() => void signOut()} />
+        <Toasts />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <CoachApp />
+      <Toasts />
+    </>
+  );
+}
+
+function CoachApp() {
+  const [view, setView] = useState<CoachView>("dashboard");
+  const [clientPreset, setClientPreset] = useState<string | null>(null);
+  const [planPreset, setPlanPreset] = useState<string | null>(null);
+  const [mealPreset, setMealPreset] = useState<string | null>(null);
+  const [clientsFilter, setClientsFilter] = useState<Filter | null>(null);
+
+  const go = (v: CoachView, id?: string) => {
+    if (v === "client") setClientPreset(id ?? null);
+    if (v === "plans") setPlanPreset(id ?? null);
+    if (v === "meals") setMealPreset(id ?? null);
+    setView(v);
+  };
+
+  /** Dashboard deep-links straight into a pre-filtered roster. */
+  const openClientsWithFilter = (f: "Active" | "Expiring Soon" | "Expired") => {
+    setClientsFilter(f);
+    setView("clients");
+  };
+
+  /** Sidebar navigation always lands on an unfiltered view. */
+  const nav = (v: CoachView) => {
+    if (v === "clients") setClientsFilter(null);
+    setView(v);
+  };
+
+  return (
+    <CoachShell view={view} setView={nav} onLogout={() => void signOut()}>
+      {view === "dashboard" && <Dashboard go={go} openClientsWithFilter={openClientsWithFilter} />}
+      {view === "clients" && <ClientsView key={clientsFilter ?? "all"} go={go} initialFilter={clientsFilter ?? undefined} />}
+      {view === "client" && clientPreset && <ClientProfile key={clientPreset} clientId={clientPreset} go={go} />}
+      {view === "plans" && <PlansView presetClientId={planPreset} />}
+      {view === "meals" && <MealsView presetClientId={mealPreset} />}
+      {view === "library" && <LibraryView />}
+      {view === "checkins" && <CheckInsView />}
+      {view === "settings" && <SettingsView />}
+    </CoachShell>
+  );
+}
+
 export default function App() {
   return (
-    <div/>
+    <StoreProvider>
+      <Root />
+    </StoreProvider>
   );
 }
