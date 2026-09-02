@@ -1,7 +1,11 @@
+/* ================================================================
+   FORGE — hand-rolled SVG charts (no chart lib dependency).
+   ================================================================ */
+
 import type { CheckIn } from "../types";
 import { fmtShort } from "../lib";
 
-/* ---------- weight line (dark theme) ---------- */
+/* ---------- weight line ---------- */
 
 export function WeightLine({ entries }: { entries: CheckIn[] }) {
   const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date) || a.ts - b.ts);
@@ -31,7 +35,6 @@ export function WeightLine({ entries }: { entries: CheckIn[] }) {
   const area = `${line} L${x(n - 1).toFixed(1)},${H - padB} L${x(0).toFixed(1)},${H - padB} Z`;
   const last = sorted[n - 1];
   const mid = sorted[Math.floor((n - 1) / 2)];
-  const gridFr = [0, 1 / 3, 2 / 3, 1];
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Weight trend">
@@ -41,13 +44,13 @@ export function WeightLine({ entries }: { entries: CheckIn[] }) {
           <stop offset="100%" stopColor="#cdf14b" stopOpacity="0" />
         </linearGradient>
       </defs>
-      {gridFr.map((f) => {
+      {[0, 1 / 3, 2 / 3, 1].map((f) => {
         const v = min + (max - min) * f;
         const gy = y(v);
         return (
           <g key={f}>
             <line x1={padL} x2={W - padR + 6} y1={gy} y2={gy} stroke="#1a251d" strokeWidth="1" />
-            <text x={W - padR + 12} y={gy + 4} fontSize="11" fill="#7c9486" fontFamily="var(--font-display)">
+            <text x={W - padR + 12} y={gy + 4} fontSize="11" fill="#71897b" fontFamily="var(--font-display)">
               {v.toFixed(1)}
             </text>
           </g>
@@ -56,89 +59,88 @@ export function WeightLine({ entries }: { entries: CheckIn[] }) {
       <path d={area} fill="url(#wgArea)" />
       <path d={line} fill="none" stroke="#cdf14b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
       {sorted.map((e, i) =>
-        i === n - 1 ? null : (
-          <circle key={e.id} cx={x(i)} cy={y(e.weight)} r="3" fill="#0f1611" stroke="#cdf14b" strokeWidth="2" />
-        ),
+        i === n - 1 ? null : <circle key={e.id} cx={x(i)} cy={y(e.weight)} r="3" fill="#0f1611" stroke="#cdf14b" strokeWidth="2" />,
       )}
       <circle cx={x(n - 1)} cy={y(last.weight)} r="11" fill="#cdf14b" opacity="0.2" className="ring-pulse" />
       <circle cx={x(n - 1)} cy={y(last.weight)} r="5" fill="#cdf14b" stroke="#0f1611" strokeWidth="2.4" />
-      <text
-        x={x(n - 1)}
-        y={y(last.weight) - 12}
-        textAnchor="middle"
-        fontSize="14"
-        fontWeight="700"
-        fill="#dcf770"
-        fontFamily="var(--font-display)"
-      >
+      <text x={x(n - 1)} y={y(last.weight) - 12} textAnchor="middle" fontSize="14" fontWeight="700" fill="#dcf770" fontFamily="var(--font-display)">
         {last.weight}
       </text>
-      <text x={x(0)} y={H - 8} textAnchor="middle" fontSize="11" fill="#7c9486">
+      <text x={x(0)} y={H - 8} textAnchor="middle" fontSize="11" fill="#71897b">
         {fmtShort(sorted[0].date)}
       </text>
-      <text x={x(Math.floor((n - 1) / 2))} y={H - 8} textAnchor="middle" fontSize="11" fill="#7c9486">
+      <text x={x(Math.floor((n - 1) / 2))} y={H - 8} textAnchor="middle" fontSize="11" fill="#71897b">
         {fmtShort(mid.date)}
       </text>
-      <text x={x(n - 1)} y={H - 8} textAnchor="middle" fontSize="11" fill="#7c9486">
+      <text x={x(n - 1)} y={H - 8} textAnchor="middle" fontSize="11" fill="#71897b">
         {fmtShort(last.date)}
       </text>
     </svg>
   );
 }
 
-/* ---------- bars for the last 7 days ---------- */
+/* ---------- macro split bar ---------- */
 
-export function WeekBars({ data }: { data: { label: string; value: number; isToday: boolean }[] }) {
-  const max = Math.max(...data.map((d) => d.value), 1);
+export function MacroSplit({ protein, carbs, fats }: { protein: number; carbs: number; fats: number }) {
+  const kcal = protein * 4 + carbs * 4 + fats * 9;
+  const seg = (g: number, per: number) => (kcal > 0 ? (g * per * 100) / kcal : 0);
+  const pPct = seg(protein, 4);
+  const cPct = seg(carbs, 4);
+  const fPct = seg(fats, 9);
   return (
-    <div className="flex items-end gap-2">
-      {data.map((d, i) => (
-        <div key={d.label + i} className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
-          <span className={`font-display text-sm font-bold ${d.value > 0 ? "text-volt-300" : "text-night-500"}`}>
-            {d.value > 0 ? d.value : ""}
-          </span>
-          <div className="flex h-24 w-full items-end">
-            <div
-              className={`bar-grow w-full rounded-t-[4px] ${
-                d.isToday
-                  ? "bg-volt-400 shadow-[0_0_18px_-4px_rgba(205,241,75,0.7)]"
-                  : d.value > 0
-                    ? "bg-moss-600"
-                    : "bg-night-700"
-              }`}
-              style={{
-                height: d.value > 0 ? `${Math.max(10, (d.value / max) * 100)}%` : "4px",
-                animationDelay: `${i * 60}ms`,
-              }}
-            />
-          </div>
-          <span className={`text-[10px] font-bold uppercase ${d.isToday ? "text-volt-300" : "text-mist-500"}`}>
-            {d.label}
-          </span>
-        </div>
-      ))}
+    <div>
+      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-night-700">
+        <div className="grow-x bg-volt-400" style={{ width: `${pPct}%` }} />
+        <div className="grow-x bg-sky-400" style={{ width: `${cPct}%`, animationDelay: "120ms" }} />
+        <div className="grow-x bg-warn-400" style={{ width: `${fPct}%`, animationDelay: "240ms" }} />
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-bold">
+        <span className="inline-flex items-center gap-1.5 text-volt-300">
+          <span className="h-2 w-2 rounded-sm bg-volt-400" /> Protein {protein}g
+        </span>
+        <span className="inline-flex items-center gap-1.5 text-sky-300">
+          <span className="h-2 w-2 rounded-sm bg-sky-400" /> Carbs {carbs}g
+        </span>
+        <span className="inline-flex items-center gap-1.5 text-warn-300">
+          <span className="h-2 w-2 rounded-sm bg-warn-400" /> Fats {fats}g
+        </span>
+      </div>
     </div>
   );
 }
 
-/* ---------- tiny sparkline ---------- */
+/* ---------- attendance ring ---------- */
 
-export function Sparkline({ values }: { values: number[] }) {
-  if (values.length < 2) return null;
-  const W = 88;
-  const H = 26;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min || 1;
-  const pts = values
-    .map(
-      (v, i) =>
-        `${((i / (values.length - 1)) * W).toFixed(1)},${(H - 3 - ((v - min) / span) * (H - 6)).toFixed(1)}`,
-    )
-    .join(" ");
+export function AttendanceRing({ pct, completed, countable }: { pct: number; completed: number; countable: number }) {
+  const r = 34;
+  const circ = 2 * Math.PI * r;
+  const filled = (pct / 100) * circ;
+  const tone = pct >= 80 ? "#63bd8c" : pct >= 50 ? "#f2c063" : "#f58a7e";
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-6 w-22" aria-hidden>
-      <polyline points={pts} fill="none" stroke="#63bd8c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <div className="flex items-center gap-4">
+      <svg viewBox="0 0 84 84" className="h-21 w-21 shrink-0" role="img" aria-label={`Attendance ${pct}%`}>
+        <circle cx="42" cy="42" r={r} fill="none" stroke="#1a251d" strokeWidth="8" />
+        <circle
+          cx="42"
+          cy="42"
+          r={r}
+          fill="none"
+          stroke={tone}
+          strokeWidth="8"
+          strokeLinecap="round"
+          strokeDasharray={`${filled} ${circ}`}
+          transform="rotate(-90 42 42)"
+        />
+        <text x="42" y="47" textAnchor="middle" fontSize="19" fontWeight="700" fill="#e6eee8" fontFamily="var(--font-display)">
+          {pct}%
+        </text>
+      </svg>
+      <div>
+        <p className="font-display text-lg font-semibold text-mist-100">
+          {completed} / {countable}
+        </p>
+        <p className="text-[11px] font-semibold text-mist-500">sessions attended (cancelled excluded)</p>
+      </div>
+    </div>
   );
 }

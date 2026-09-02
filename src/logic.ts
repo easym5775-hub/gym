@@ -1,15 +1,20 @@
-import type { AppState, CheckIn, Client, Payment, Session, SubState, Subscription } from "./types";
-import { addDays, diffDays, todayISO } from "./lib";
+/* ================================================================
+   FORGE — pure, derived business logic.
+   Everything here is *computed* from stored records — statuses,
+   remaining days, attendance and follow-ups are never stored.
+   Operates on plain arrays of the existing types; has no side effects.
+   ================================================================ */
 
-/**
- * Pure business logic. Everything here is *derived* from stored records —
- * statuses, remaining days, attendance and follow-ups are never stored as
- * editable values.
- */
+import type { AppState, CheckIn, Client, Payment, Session, SubState, Subscription } from "./types";
+import { addDays, diffDays, round1, todayISO } from "./lib";
 
 /* ---------------- subscriptions ---------------- */
 
-export type SubWithState = { sub: Subscription | null; state: SubState; daysLeft: number };
+export interface SubWithState {
+  sub: Subscription | null;
+  state: SubState;
+  daysLeft: number;
+}
 
 /** The current subscription = the one ending latest. */
 export function currentSubscription(subs: Subscription[]): Subscription | null {
@@ -30,10 +35,9 @@ export function subscriptionState(sub: Subscription | null): SubWithState {
 
 /** "23 Days Remaining" / "Expires Today" / "Expired 5 Days Ago" */
 export function remainingLabel(daysLeft: number): string {
-  if (daysLeft < 0) return `Expired ${Math.abs(daysLeft)} Day${Math.abs(daysLeft) === 1 ? "" : "s"} Ago`;
-  if (daysLeft === 0) return "Expires Today";
-  if (daysLeft === 1) return "1 Day Remaining";
-  return `${daysLeft} Days Remaining`;
+  if (daysLeft < 0) return `Expired ${Math.abs(daysLeft)}d ago`;
+  if (daysLeft === 0) return "Expires today";
+  return `${daysLeft}d remaining`;
 }
 
 export function subHistory(subs: Subscription[]): Subscription[] {
@@ -95,17 +99,16 @@ export function progressOf(checkIns: CheckIn[]): Progress {
   const asc = [...checkIns].sort((a, b) => a.date.localeCompare(a.date) || a.ts - b.ts);
   const first = asc[0] ?? null;
   const last = asc[asc.length - 1] ?? null;
-  const r = (n: number) => Math.round(n * 10) / 10;
   const withWaist = asc.filter((c) => c.waist !== undefined);
   const fw = withWaist[0] ?? null;
   const lw = withWaist[withWaist.length - 1] ?? null;
   return {
     startWeight: first ? first.weight : null,
     currentWeight: last ? last.weight : null,
-    weightChange: first && last && asc.length > 1 ? r(last.weight - first.weight) : null,
+    weightChange: first && last && asc.length > 1 ? round1(last.weight - first.weight) : null,
     startWaist: fw?.waist ?? null,
     currentWaist: lw?.waist ?? null,
-    waistChange: fw && lw && withWaist.length > 1 ? r((lw.waist ?? 0) - (fw.waist ?? 0)) : null,
+    waistChange: fw && lw && withWaist.length > 1 ? round1((lw.waist ?? 0) - (fw.waist ?? 0)) : null,
   };
 }
 
@@ -133,32 +136,14 @@ export function followUpInfo(client: Client, checkIns: CheckIn[]): FollowUpInfo 
   const next = addDays(basis, frequency);
   const daysToNext = diffDays(todayISO(), next);
   let label: string;
-  if (daysToNext < 0) label = `Overdue ${Math.abs(daysToNext)} Day${Math.abs(daysToNext) === 1 ? "" : "s"}`;
-  else if (daysToNext === 0) label = "Due Today";
-  else if (daysToNext === 1) label = "Due Tomorrow";
-  else label = `In ${daysToNext} Days`;
+  if (daysToNext < 0) label = `Overdue ${Math.abs(daysToNext)}d`;
+  else if (daysToNext === 0) label = "Due today";
+  else if (daysToNext === 1) label = "Due tomorrow";
+  else label = `In ${daysToNext}d`;
   return { frequency, basis, next, daysToNext, label, overdue: daysToNext < 0 };
 }
 
 /* ---------------- dashboard aggregates ---------------- */
-
-export interface ClientBundle {
-  client: Client;
-  subs: Subscription[];
-  payments: Payment[];
-  sessions: Session[];
-  checkIns: CheckIn[];
-}
-
-export function bundleFor(state: AppState, clientId: string): ClientBundle {
-  return {
-    client: state.clients.find((c) => c.id === clientId)!,
-    subs: state.subscriptions.filter((s) => s.clientId === clientId),
-    payments: state.payments.filter((p) => p.clientId === clientId),
-    sessions: state.sessions.filter((s) => s.clientId === clientId),
-    checkIns: state.checkIns.filter((c) => c.clientId === clientId),
-  };
-}
 
 export interface ActionLists {
   todaySessions: { client: Client; session: Session }[];
@@ -166,7 +151,7 @@ export interface ActionLists {
   overdueFollowUps: { client: Client; info: FollowUpInfo }[];
   expiringSoon: { client: Client; info: SubWithState }[];
   expired: { client: Client; info: SubWithState }[];
-  staleCheckIns: Client[]; // no check-in in the last 7 days (or ever)
+  staleCheckIns: Client[];
 }
 
 export function actionLists(state: AppState): ActionLists {
@@ -183,10 +168,7 @@ export function actionLists(state: AppState): ActionLists {
     if (client.status !== "Active") continue;
     const sessions = state.sessions.filter((s) => s.clientId === client.id);
     for (const session of sessions) {
-      if (
-        session.date === today &&
-        (session.status === "Scheduled" || session.status === "Confirmed")
-      ) {
+      if (session.date === today && (session.status === "Scheduled" || session.status === "Confirmed")) {
         out.todaySessions.push({ client, session });
       }
     }
@@ -202,7 +184,7 @@ export function actionLists(state: AppState): ActionLists {
     if (info.state === "Expiring Soon") out.expiringSoon.push({ client, info });
     if (info.state === "Expired") out.expired.push({ client, info });
     const last = latestCheckIn(checkIns);
-    if (last && diffDays(last.date, today) > 7 && !out.staleCheckIns.includes(client)) {
+    if (last && diffDays(last.date, today) > 7 && !out.staleCheckIns.some((c) => c.id === client.id)) {
       out.staleCheckIns.push(client);
     }
   }

@@ -1,48 +1,64 @@
+/* ================================================================
+   FORGE — app root: auth-phase routing + coach navigation.
+   ================================================================ */
+
 import { useState } from "react";
+import { Dumbbell, Loader2 } from "lucide-react";
 import type { CoachView } from "./types";
-import { StoreProvider } from "./store";
+import { StoreProvider, useApp } from "./store";
+import { signOut } from "./services/auth";
 import { Toasts } from "./components/ui";
 import { Auth } from "./components/Auth";
-import { CoachShell } from "./components/Sidebar";
+import { CoachShell } from "./components/Shell";
 import { Dashboard } from "./components/Dashboard";
-import { ClientsView } from "./components/Clients";
-import { PlansView } from "./components/Schedule";
-import { MealsView } from "./components/Meals";
-import { LibraryView } from "./components/Library";
-import { CheckInsView } from "./components/ClientDetails";
-import { SettingsView } from "./components/SettingsView";
+import { ClientsView, ClientProfile, type Filter } from "./components/Clients";
+import { PlansView, MealsView, LibraryView, CheckInsView } from "./components/Workspaces";
+import { SettingsView } from "./components/Settings";
 import { ClientApp } from "./components/ClientApp";
-import { ClientProfile } from "./components/ClientProfile";
 
-type Session = { role: "coach" } | { role: "client"; clientId: string } | null;
+function Splash({ label }: { label: string }) {
+  return (
+    <div className="relative grid min-h-screen place-items-center">
+      <div className="app-glow pointer-events-none fixed inset-0" />
+      <div className="dot-grid pointer-events-none fixed inset-0" />
+      <div className="rise relative z-10 flex flex-col items-center gap-4">
+        <span className="grid h-14 w-14 place-items-center rounded-xl bg-volt-400 text-night-950 shadow-[0_14px_40px_-12px_rgba(205,241,75,0.6)]">
+          <Dumbbell className="h-8 w-8" strokeWidth={2.2} />
+        </span>
+        <p className="font-display text-2xl font-bold uppercase tracking-wide text-mist-100">Forge</p>
+        <p className="flex items-center gap-2 text-xs font-semibold text-mist-500">
+          <Loader2 className="h-4 w-4 animate-spin text-volt-400" /> {label}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function Root() {
-  const [session, setSession] = useState<Session>(null);
-  const [view, setView] = useState<CoachView>("dashboard");
-  const [planPreset, setPlanPreset] = useState<string | null>(null);
-  const [mealPreset, setMealPreset] = useState<string | null>(null);
-  const [clientPreset, setClientPreset] = useState<string | null>(null);
+  const { phase, me } = useApp();
 
-  const go = (v: CoachView, id?: string) => {
-    if (v === "plans") setPlanPreset(id ?? null);
-    if (v === "meals") setMealPreset(id ?? null);
-    if (v === "client") setClientPreset(id ?? null);
-    setView(v);
-  };
-
-  if (!session) {
+  if (phase === "booting" || phase === "loading") {
     return (
       <>
-        <Auth onCoach={() => { setSession({ role: "coach" }); setView("dashboard"); }} onClient={(id) => setSession({ role: "client", clientId: id })} />
+        <Splash label={phase === "booting" ? "Warming up…" : "Loading your data…"} />
         <Toasts />
       </>
     );
   }
 
-  if (session.role === "client") {
+  if (phase === "signed-out" || !me) {
     return (
       <>
-        <ClientApp clientId={session.clientId} onLogout={() => setSession(null)} />
+        <Auth />
+        <Toasts />
+      </>
+    );
+  }
+
+  if (me.role === "client") {
+    return (
+      <>
+        <ClientApp onLogout={() => void signOut()} />
         <Toasts />
       </>
     );
@@ -50,18 +66,49 @@ function Root() {
 
   return (
     <>
-      <CoachShell view={view} setView={setView} onLogout={() => setSession(null)}>
-        {view === "dashboard" && <Dashboard go={go} />}
-        {view === "clients" && <ClientsView go={go} />}
-        {view === "client" && clientPreset && <ClientProfile clientId={clientPreset} go={go} />}
-        {view === "plans" && <PlansView presetClientId={planPreset} />}
-        {view === "meals" && <MealsView presetClientId={mealPreset} />}
-        {view === "library" && <LibraryView />}
-        {view === "checkins" && <CheckInsView />}
-        {view === "settings" && <SettingsView />}
-      </CoachShell>
+      <CoachApp />
       <Toasts />
     </>
+  );
+}
+
+function CoachApp() {
+  const [view, setView] = useState<CoachView>("dashboard");
+  const [clientPreset, setClientPreset] = useState<string | null>(null);
+  const [planPreset, setPlanPreset] = useState<string | null>(null);
+  const [mealPreset, setMealPreset] = useState<string | null>(null);
+  const [clientsFilter, setClientsFilter] = useState<Filter | null>(null);
+
+  const go = (v: CoachView, id?: string) => {
+    if (v === "client") setClientPreset(id ?? null);
+    if (v === "plans") setPlanPreset(id ?? null);
+    if (v === "meals") setMealPreset(id ?? null);
+    setView(v);
+  };
+
+  /** Dashboard deep-links straight into a pre-filtered roster. */
+  const openClientsWithFilter = (f: "Active" | "Expiring Soon" | "Expired") => {
+    setClientsFilter(f);
+    setView("clients");
+  };
+
+  /** Sidebar navigation always lands on an unfiltered view. */
+  const nav = (v: CoachView) => {
+    if (v === "clients") setClientsFilter(null);
+    setView(v);
+  };
+
+  return (
+    <CoachShell view={view} setView={nav} onLogout={() => void signOut()}>
+      {view === "dashboard" && <Dashboard go={go} openClientsWithFilter={openClientsWithFilter} />}
+      {view === "clients" && <ClientsView key={clientsFilter ?? "all"} go={go} initialFilter={clientsFilter ?? undefined} />}
+      {view === "client" && clientPreset && <ClientProfile key={clientPreset} clientId={clientPreset} go={go} />}
+      {view === "plans" && <PlansView presetClientId={planPreset} />}
+      {view === "meals" && <MealsView presetClientId={mealPreset} />}
+      {view === "library" && <LibraryView />}
+      {view === "checkins" && <CheckInsView />}
+      {view === "settings" && <SettingsView />}
+    </CoachShell>
   );
 }
 

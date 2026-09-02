@@ -1,46 +1,59 @@
-import { useState } from "react";
-import { GOAL_META } from "../types";
-import { todayISO } from "../lib";
-import { useApp } from "../store";
-import { Avatar, btnVolt, chip } from "./ui";
-import { IconArrowRight, IconDumbbell, IconUsers, IconZap } from "../icons";
+/* ================================================================
+   FORGE — sign-in screen (Coach email + Client username login).
+   ================================================================ */
 
-const TICKER = [
-  "STRENGTH",
-  "NUTRITION",
-  "RECOVERY",
-  "CONSISTENCY",
-  "PROGRESS",
-  "DISCIPLINE",
-  "OVERLOAD",
-  "FORM FIRST",
-];
+import { useState, type FormEvent } from "react";
+import { ArrowRight, Dumbbell, Loader2, ShieldCheck, Users, Zap } from "lucide-react";
+import { clientSignIn, coachSignIn, coachSignUp, DEMO_HINT, demoMode } from "../services/auth";
+import { errorMessage } from "../lib";
+import { btnPrimary, inputCls, labelCls } from "./ui";
 
-export function Auth({ onCoach, onClient }: { onCoach: () => void; onClient: (id: string) => void }) {
-  const { state } = useApp();
-  const [role, setRole] = useState<"coach" | "client">("coach");
-  const [picked, setPicked] = useState("");
+const TICKER = ["STRENGTH", "NUTRITION", "RECOVERY", "CONSISTENCY", "PROGRESS", "DISCIPLINE", "OVERLOAD", "FORM FIRST"];
 
-  const weekStart = todayISO();
-  const checkInsWeek = state.checkIns.filter((c) => c.date >= addISO(weekStart, -6)).length;
-  const active = state.clients.filter((c) => c.status === "Active").length;
+type Role = "coach" | "client";
+type CoachMode = "signin" | "signup";
 
-  const enter = () => {
-    if (role === "coach") onCoach();
-    else if (picked) onClient(picked);
+export function Auth() {
+  const [role, setRole] = useState<Role>("coach");
+  const [coachMode, setCoachMode] = useState<CoachMode>("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [coachName, setCoachName] = useState("");
+  const [username, setUsername] = useState("");
+  const [clientPassword, setClientPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setBusy(true);
+    try {
+      if (role === "coach") {
+        if (coachMode === "signup") await coachSignUp(email.trim(), password, coachName.trim() || "Coach");
+        else await coachSignIn(email.trim(), password);
+      } else {
+        await clientSignIn(username, clientPassword);
+      }
+      // Session change is picked up by the store via onAuthChange.
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden">
       <div className="app-glow pointer-events-none fixed inset-0" />
-      <div className="dot-grid pointer-events-none fixed inset-0 opacity-60" />
+      <div className="dot-grid pointer-events-none fixed inset-0" />
 
       <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 items-center gap-10 px-5 py-10 lg:gap-16 lg:px-8">
         {/* brand side */}
         <div className="hidden flex-1 flex-col lg:flex">
           <div className="rise flex items-center gap-3">
             <span className="grid h-12 w-12 place-items-center rounded-xl bg-volt-400 text-night-950 shadow-[0_10px_30px_-10px_rgba(205,241,75,0.55)]">
-              <IconDumbbell className="h-7 w-7" strokeWidth={2.2} />
+              <Dumbbell className="h-7 w-7" strokeWidth={2.2} />
             </span>
             <div>
               <p className="font-display text-3xl font-bold uppercase leading-none tracking-wide text-mist-100">Forge</p>
@@ -48,39 +61,46 @@ export function Auth({ onCoach, onClient }: { onCoach: () => void; onClient: (id
             </div>
           </div>
 
-          <h1 className="rise mt-14 font-display text-[86px] font-bold uppercase leading-[0.9] tracking-tight text-mist-100" style={{ animationDelay: "90ms" }}>
+          <h1 className="rise mt-14 font-display text-[84px] font-bold uppercase leading-[0.88] tracking-tight text-mist-100" style={{ animationDelay: "90ms" }}>
             Every rep.
             <br />
-            Every meal.
+            <span className="text-stroke">Every meal.</span>
             <br />
             <span className="text-volt-400">Tracked.</span>
           </h1>
 
           <p className="rise mt-6 max-w-md text-sm leading-6 text-mist-400" style={{ animationDelay: "180ms" }}>
-            The command center for coaches and their clients — workout plans, nutrition targets and daily
-            check-ins in one place.
+            The command center for coaches and their clients — workout plans, nutrition targets and daily check-ins,
+            backed by Supabase auth and Postgres.
           </p>
 
-          <div className="rise mt-10 flex gap-8" style={{ animationDelay: "260ms" }}>
-            {[
-              { v: String(active), l: "Active clients" },
-              { v: String(checkInsWeek), l: "Check-ins · 7d" },
-              { v: String(state.exercises.length), l: "Exercises in library" },
-            ].map((s) => (
-              <div key={s.l}>
-                <p className="font-display text-4xl font-bold text-volt-300">{s.v}</p>
-                <p className="mt-1 text-[11px] font-bold uppercase tracking-wider text-mist-500">{s.l}</p>
-              </div>
-            ))}
+          <div className="rise mt-10 flex items-center gap-3 text-xs text-mist-500" style={{ animationDelay: "240ms" }}>
+            <ShieldCheck className="h-4 w-4 text-moss-400" />
+            Row-level security keeps every coach's clients private.
           </div>
+
+          {demoMode && (
+            <div className="rise mt-6 max-w-md rounded-xl border border-warn-400/25 bg-warn-400/10 p-4 text-xs leading-5 text-warn-300" style={{ animationDelay: "300ms" }}>
+              <p className="font-display text-sm font-bold uppercase tracking-wide">Demo mode</p>
+              <p className="mt-1 text-warn-300/90">
+                Supabase credentials aren't set, so data lives in this browser. Sign in with password{" "}
+                <code className="rounded bg-night-800 px-1.5 py-0.5 font-bold text-volt-300">{DEMO_HINT}</code> — coach uses any
+                email, clients use <code className="rounded bg-night-800 px-1.5 py-0.5 font-bold text-volt-300">ahmed</code>,{" "}
+                <code className="rounded bg-night-800 px-1.5 py-0.5 font-bold text-volt-300">sara</code> or{" "}
+                <code className="rounded bg-night-800 px-1.5 py-0.5 font-bold text-volt-300">omar</code>.
+              </p>
+            </div>
+          )}
         </div>
 
-        {/* sign-in side */}
+        {/* form side */}
         <div className="rise w-full max-w-md flex-none lg:w-auto" style={{ animationDelay: "140ms" }}>
-          <div className="rounded-xl border border-night-600 bg-night-850/90 p-6 shadow-2xl backdrop-blur">
+          <div className="relative rounded-xl border border-night-600 bg-night-850/90 p-6 shadow-[0_30px_70px_-30px_rgba(0,0,0,0.9)] backdrop-blur">
+            <span className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-volt-400/50 to-transparent" />
+
             <div className="mb-6 flex items-center gap-3 lg:hidden">
               <span className="grid h-10 w-10 place-items-center rounded-lg bg-volt-400 text-night-950">
-                <IconDumbbell className="h-5.5 w-5.5" strokeWidth={2.2} />
+                <Dumbbell className="h-5 w-5" strokeWidth={2.2} />
               </span>
               <div>
                 <p className="font-display text-2xl font-bold uppercase leading-none text-mist-100">Forge</p>
@@ -93,77 +113,93 @@ export function Auth({ onCoach, onClient }: { onCoach: () => void; onClient: (id
 
             <div className="mt-5 grid grid-cols-2 gap-1.5 rounded-lg border border-night-600 bg-night-900 p-1.5">
               <button
-                onClick={() => setRole("coach")}
+                type="button"
+                onClick={() => {
+                  setRole("coach");
+                  setError("");
+                }}
                 className={`flex cursor-pointer items-center justify-center gap-2 rounded-md py-2.5 text-sm font-bold transition ${
                   role === "coach" ? "bg-volt-400 text-night-950 shadow" : "text-mist-400 hover:text-mist-100"
                 }`}
               >
-                <IconZap className="h-4 w-4" />
-                Coach
+                <Zap className="h-4 w-4" /> Coach
               </button>
               <button
-                onClick={() => setRole("client")}
+                type="button"
+                onClick={() => {
+                  setRole("client");
+                  setError("");
+                }}
                 className={`flex cursor-pointer items-center justify-center gap-2 rounded-md py-2.5 text-sm font-bold transition ${
                   role === "client" ? "bg-volt-400 text-night-950 shadow" : "text-mist-400 hover:text-mist-100"
                 }`}
               >
-                <IconUsers className="h-4 w-4" />
-                Client
+                <Users className="h-4 w-4" /> Client
               </button>
             </div>
 
-            {role === "coach" ? (
-              <div className="animate-pop mt-5">
-                <div className="flex items-center gap-3 rounded-lg border border-night-600 bg-night-800 p-3">
-                  <span className="grid h-10 w-10 place-items-center rounded-lg bg-moss-700 font-display font-bold text-moss-300">C</span>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-mist-100">Coach Dana</p>
-                    <p className="text-[11px] text-mist-500">Full access — clients, plans, meals & check-ins</p>
-                  </div>
-                </div>
-                <button className={`${btnVolt} mt-4 h-12 w-full text-base`} onClick={enter}>
-                  Open coach dashboard
-                  <IconArrowRight className="h-5 w-5" />
-                </button>
-              </div>
-            ) : (
-              <div className="animate-pop mt-5">
-                <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-mist-400">Choose your profile</p>
-                <div className="grid max-h-64 gap-1.5 overflow-y-auto pe-1">
-                  {state.clients.length === 0 && (
-                    <p className="rounded-lg border border-dashed border-night-500 p-4 text-center text-xs text-mist-500">
-                      No clients yet — sign in as coach and add the first one.
-                    </p>
-                  )}
-                  {state.clients.map((c) => (
+            <form onSubmit={submit} className="animate-pop mt-5 grid gap-4">
+              {role === "coach" ? (
+                <>
+                  <div className="flex gap-1.5 text-xs font-bold">
                     <button
-                      key={c.id}
-                      onClick={() => setPicked(c.id)}
-                      className={`flex cursor-pointer items-center gap-3 rounded-lg border p-2.5 text-start transition ${
-                        picked === c.id
-                          ? "border-volt-400 bg-volt-400/10"
-                          : "border-night-600 bg-night-800 hover:border-night-500"
+                      type="button"
+                      onClick={() => setCoachMode("signin")}
+                      className={`flex-1 cursor-pointer rounded-md border py-1.5 transition ${
+                        coachMode === "signin" ? "border-volt-400/60 bg-volt-400/10 text-volt-300" : "border-night-600 text-mist-400 hover:text-mist-200"
                       }`}
                     >
-                      <Avatar name={c.name} photo={c.photo} className="h-9 w-9 text-[11px]" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-bold text-mist-100">{c.name}</span>
-                        <span className="block truncate text-[11px] text-mist-500">{c.email || c.phone}</span>
-                      </span>
-                      <span className={`${chip} ${GOAL_META[c.goal].chip}`}>{c.goal}</span>
+                      Sign in
                     </button>
-                  ))}
-                </div>
-                <button className={`${btnVolt} mt-4 h-12 w-full text-base`} onClick={enter} disabled={!picked}>
-                  {picked ? "Enter client space" : "Select a client first"}
-                  <IconArrowRight className="h-5 w-5" />
-                </button>
-              </div>
-            )}
+                    <button
+                      type="button"
+                      onClick={() => setCoachMode("signup")}
+                      className={`flex-1 cursor-pointer rounded-md border py-1.5 transition ${
+                        coachMode === "signup" ? "border-volt-400/60 bg-volt-400/10 text-volt-300" : "border-night-600 text-mist-400 hover:text-mist-200"
+                      }`}
+                    >
+                      Create account
+                    </button>
+                  </div>
+                  {coachMode === "signup" && (
+                    <div>
+                      <label className={labelCls}>Name</label>
+                      <input className={inputCls} value={coachName} onChange={(e) => setCoachName(e.target.value)} placeholder="Coach Dana" autoComplete="name" />
+                    </div>
+                  )}
+                  <div>
+                    <label className={labelCls}>Email</label>
+                    <input className={inputCls} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@gym.com" autoComplete="email" />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Password</label>
+                    <input className={inputCls} type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" autoComplete={coachMode === "signup" ? "new-password" : "current-password"} />
+                  </div>
+                  <button className={`${btnPrimary} h-12 w-full text-base`} type="submit" disabled={busy}>
+                    {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowRight className="h-5 w-5" />}
+                    {coachMode === "signup" ? "Create coach account" : "Open coach dashboard"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className={labelCls}>Username</label>
+                    <input className={inputCls} required value={username} onChange={(e) => setUsername(e.target.value)} placeholder="your username" autoComplete="username" />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Password</label>
+                    <input className={inputCls} type="password" required value={clientPassword} onChange={(e) => setClientPassword(e.target.value)} placeholder="••••••••" autoComplete="current-password" />
+                  </div>
+                  <button className={`${btnPrimary} h-12 w-full text-base`} type="submit" disabled={busy}>
+                    {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowRight className="h-5 w-5" />}
+                    Enter client space
+                  </button>
+                  <p className="text-center text-[11px] text-mist-500">Your coach gave you these credentials — no email needed.</p>
+                </>
+              )}
 
-            <p className="mt-5 text-center text-[11px] text-mist-500">
-              Demo workspace — all data lives in this browser only.
-            </p>
+              {error && <p className="rounded-lg border border-danger-500/30 bg-danger-500/10 px-3 py-2 text-xs font-semibold text-danger-300">{error}</p>}
+            </form>
           </div>
         </div>
       </div>
@@ -183,10 +219,4 @@ export function Auth({ onCoach, onClient }: { onCoach: () => void; onClient: (id
       </div>
     </div>
   );
-}
-
-function addISO(iso: string, n: number) {
-  const [y, m, d] = iso.split("-").map(Number);
-  const dt = new Date(y, (m ?? 1) - 1, (d ?? 1) + n);
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
 }

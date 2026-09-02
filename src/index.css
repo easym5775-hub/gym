@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 
 :root {
@@ -8,27 +9,29 @@
   --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Barlow Condensed", "Manrope", sans-serif;
 
+  --color-night-300: #5f7668;
   --color-night-400: #4a6154;
   --color-night-500: #31443a;
   --color-night-600: #24322a;
+  --color-night-650: #1e2a22;
   --color-night-700: #1a251d;
+  --color-night-750: #16201a;
   --color-night-800: #131b15;
   --color-night-850: #0f1611;
-  --color-night-900: #0b100d;
-  --color-night-950: #080c0a;
+  --color-night-900: #0c120e;
+  --color-night-950: #0a0f0c;
 
-  --color-mist-100: #e4ede6;
-  --color-mist-200: #cbd8ce;
+  --color-mist-100: #e6eee8;
+  --color-mist-200: #cdd9d0;
   --color-mist-300: #aebfb3;
-  --color-mist-400: #93a89a;
-  --color-mist-500: #7c9486;
+  --color-mist-400: #8fa496;
+  --color-mist-500: #71897b;
 
   --color-volt-200: #eafba0;
   --color-volt-300: #dcf770;
   --color-volt-400: #cdf14b;
   --color-volt-500: #b9e32c;
   --color-volt-600: #97be1b;
-  --color-volt-700: #74951a;
 
   --color-moss-300: #8fd6ac;
   --color-moss-400: #63bd8c;
@@ -54,11 +57,18 @@ body {
   background-color: var(--color-night-950);
   color: var(--color-mist-100);
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: "ss01";
 }
 
 ::selection {
   background: var(--color-volt-400);
   color: var(--color-night-950);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-volt-400);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 
 *::-webkit-scrollbar {
@@ -86,18 +96,38 @@ input[type="number"] {
   appearance: textfield;
 }
 
-/* ---------- ambient layers ---------- */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- ambient layer ---------- */
 
 .app-glow {
   background:
-    radial-gradient(900px 480px at 88% -8%, rgba(65, 163, 113, 0.13), transparent 65%),
-    radial-gradient(720px 420px at -6% 108%, rgba(205, 241, 75, 0.07), transparent 60%);
+    radial-gradient(1100px 520px at 85% -10%, rgba(65, 163, 113, 0.1), transparent 62%),
+    radial-gradient(800px 400px at -8% 110%, rgba(205, 241, 75, 0.045), transparent 60%),
+    linear-gradient(180deg, rgba(19, 27, 21, 0.5), transparent 340px);
 }
 
 .dot-grid {
-  background-image: radial-gradient(rgba(228, 237, 230, 0.05) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(230, 238, 232, 0.05) 1px, transparent 1px);
   background-size: 26px 26px;
+  mask-image: linear-gradient(180deg, black, transparent 75%);
 }
+
+.noise {
+  position: relative;
+}
+.noise::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------- surfaces ---------- */
 
 .card-lift {
   transition:
@@ -108,7 +138,12 @@ input[type="number"] {
 .card-lift:hover {
   transform: translateY(-2px);
   border-color: var(--color-night-500);
-  box-shadow: 0 16px 34px -18px rgba(0, 0, 0, 0.75);
+  box-shadow: 0 16px 34px -20px rgba(0, 0, 0, 0.8);
+}
+
+.text-stroke {
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgba(230, 238, 232, 0.55);
 }
 
 /* ---------- motion ---------- */
@@ -116,7 +151,7 @@ input[type="number"] {
 @keyframes rise-in {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -124,13 +159,13 @@ input[type="number"] {
   }
 }
 .rise {
-  animation: rise-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: rise-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes pop-in {
   from {
     opacity: 0;
-    transform: translateY(12px) scale(0.965);
+    transform: translateY(8px) scale(0.975);
   }
   to {
     opacity: 1;
@@ -138,7 +173,7 @@ input[type="number"] {
   }
 }
 .animate-pop {
-  animation: pop-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: pop-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes fade-in {
@@ -150,13 +185,13 @@ input[type="number"] {
   }
 }
 .animate-fade {
-  animation: fade-in 0.22s ease both;
+  animation: fade-in 0.18s ease both;
 }
 
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(16px) scale(0.96);
+    transform: translateY(12px) scale(0.97);
   }
   to {
     opacity: 1;
@@ -164,7 +199,7 @@ input[type="number"] {
   }
 }
 .animate-toast {
-  animation: toast-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: toast-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes bar-grow {
@@ -176,13 +211,26 @@ input[type="number"] {
   }
 }
 .bar-grow {
-  animation: bar-grow 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: bar-grow 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
   transform-origin: bottom;
+}
+
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.grow-x {
+  animation: grow-x 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: left;
 }
 
 @keyframes ring-pulse {
   0% {
-    opacity: 0.65;
+    opacity: 0.6;
     transform: scale(0.5);
   }
   75% {
@@ -195,7 +243,7 @@ input[type="number"] {
   }
 }
 .ring-pulse {
-  animation: ring-pulse 2s ease-out infinite;
+  animation: ring-pulse 2.2s ease-out infinite;
   transform-box: fill-box;
   transform-origin: center;
 }
@@ -207,8 +255,8 @@ input[type="number"] {
     transform: scale(1);
   }
   50% {
-    opacity: 0.55;
-    transform: scale(0.82);
+    opacity: 0.5;
+    transform: scale(0.8);
   }
 }
 .tick-pulse {
@@ -224,8 +272,30 @@ input[type="number"] {
   }
 }
 .ticker-track {
-  animation: marquee-x 26s linear infinite;
+  animation: marquee-x 28s linear infinite;
 }
 .ticker-track:hover {
   animation-play-state: paused;
+}
+
+/* ---------- skeleton ---------- */
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+.skeleton {
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    var(--color-night-800) 25%,
+    var(--color-night-700) 50%,
+    var(--color-night-800) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s linear infinite;
 }
