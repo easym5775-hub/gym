@@ -100,6 +100,9 @@ const clean = (row: Row): Row => {
   delete out.coach_id;
   delete out.created_at;
   delete out.updated_at;
+  // login_email is the synthetic auth email — it is ONLY ever set by the
+  // create-client-account edge function. The frontend must never write it.
+  delete out.login_email;
   return out;
 };
 

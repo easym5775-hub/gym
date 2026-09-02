@@ -76,11 +76,12 @@ serve(async (req) => {
     if (password.length < 6) return json({ error: "Password must be at least 6 characters." }, 400);
     if (!name) return json({ error: "Client name is required." }, 400);
 
-    // Friendly uniqueness check before hitting auth.admin.
+    // Friendly uniqueness check before hitting auth.admin. Usernames must be
+    // GLOBALLY unique — the synthetic email ({username}@clients.forge.internal)
+    // has to be unique across all of Supabase Auth, not just within one coach.
     const { data: taken } = await admin
       .from("clients")
       .select("id")
-      .eq("coach_id", coachId)
       .ilike("username", username)
       .maybeSingle();
     if (taken) return json({ error: `Username "${username}" is already taken.` }, 409);
@@ -99,6 +100,9 @@ serve(async (req) => {
       coach_id: coachId,
       username,
       name,
+      // login_email = the synthetic auth email (what the client signs in with).
+      // email       = the real contact email the coach typed (never used for auth).
+      login_email: email,
       email: String(body.email ?? ""),
       phone: String(body.phone ?? ""),
       gender: body.gender ?? null,
