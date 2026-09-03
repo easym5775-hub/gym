@@ -3,7 +3,7 @@
    ================================================================ */
 
 import { useState } from "react";
-import { ArrowRight, Dumbbell, User, Users, Zap } from "lucide-react";
+import { ArrowRight, Check, Dumbbell, User, Users, Zap } from "lucide-react";
 import { DEMO_COACH_EMAIL, DEMO_PASSWORD, isDemoMode } from "../services/backend";
 import { coachSignIn, coachSignUp, clientSignIn } from "../services/auth";
 import { errorMessage } from "../lib";
@@ -19,6 +19,7 @@ export function Auth() {
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [clientPassword, setClientPassword] = useState("");
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -27,10 +28,10 @@ export function Auth() {
     setBusy(true);
     try {
       if (role === "coach") {
-        if (mode === "signup") await coachSignUp(email.trim(), password, name.trim() || "Coach");
-        else await coachSignIn(email.trim(), password);
+        if (mode === "signup") await coachSignUp(email.trim(), password, name.trim() || "Coach", remember);
+        else await coachSignIn(email.trim(), password, remember);
       } else {
-        await clientSignIn(username.trim(), clientPassword);
+        await clientSignIn(username.trim(), clientPassword, remember);
       }
       // store's onAuthChange listener boots the session.
     } catch (e) {
@@ -156,6 +157,7 @@ export function Auth() {
                       onKeyDown={(e) => e.key === "Enter" && void submit()}
                     />
                   </div>
+                  <RememberMe checked={remember} onChange={setRemember} />
                   <button className={`${btnPrimary} h-12 w-full text-base`} onClick={() => void submit()} disabled={busy}>
                     {busy ? "Signing in…" : mode === "signup" ? "Create coach account" : "Open coach dashboard"}
                     {!busy && <ArrowRight className="h-5 w-5 rtl:rotate-180" />}
@@ -185,6 +187,7 @@ export function Auth() {
                       onKeyDown={(e) => e.key === "Enter" && void submit()}
                     />
                   </div>
+                  <RememberMe checked={remember} onChange={setRemember} />
                   <button className={`${btnPrimary} h-12 w-full text-base`} onClick={() => void submit()} disabled={busy}>
                     {busy ? "Signing in…" : "Enter client space"}
                     {!busy && <ArrowRight className="h-5 w-5 rtl:rotate-180" />}
@@ -213,7 +216,41 @@ export function Auth() {
       </div>
 
       {/* ticker */}
-      <div className="relative z-10 border-t border-night-700 bg-night-900/70 py-3 backdrop-blur">
+      <RememberMeTicker />
+    </div>
+  );
+}
+
+/* ---------------- remember me ---------------- */
+
+function RememberMe({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      aria-pressed={checked}
+      className="group flex w-full cursor-pointer items-center gap-2.5 text-start"
+    >
+      <span
+        className={`grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[5px] border transition-all duration-150 ${
+          checked
+            ? "border-volt-400 bg-volt-400 text-night-950 shadow-[0_0_14px_-2px_rgba(205,241,75,0.6)]"
+            : "border-night-500 bg-night-800 text-transparent group-hover:border-mist-400"
+        }`}
+      >
+        <Check className={`h-3 w-3 ${checked ? "scale-100" : "scale-0"} transition-transform duration-150`} strokeWidth={3.2} />
+      </span>
+      <span className="text-xs font-semibold text-mist-300 transition group-hover:text-mist-100">
+        Remember me
+        <span className="ms-1.5 font-normal text-mist-500">{checked ? "stay signed in on this device" : "sign out when the browser closes"}</span>
+      </span>
+    </button>
+  );
+}
+
+function RememberMeTicker() {
+  return (
+    <div className="relative z-10 border-t border-night-700 bg-night-900/70 py-3 backdrop-blur">
         <div className="overflow-hidden">
           <div className="ticker-track flex w-max items-center gap-8">
             {[...TICKER, ...TICKER].map((t, i) => (
@@ -225,6 +262,5 @@ export function Auth() {
           </div>
         </div>
       </div>
-    </div>
   );
 }

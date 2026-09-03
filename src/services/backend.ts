@@ -29,6 +29,7 @@ import type {
   Subscription,
 } from "../types";
 import { todayISO, uuid } from "../lib";
+import { rememberAwareStorage, setRemember } from "./remember";
 
 /* ---------------- config ---------------- */
 
@@ -41,7 +42,15 @@ export const isDemoMode = !isSupabaseConfigured;
 const supabase = createClient(
   SUPABASE_URL || "https://not-configured.supabase.co",
   SUPABASE_ANON_KEY || "public-anon-key-not-set",
-  { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } },
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      // Honour "Remember me": localStorage vs sessionStorage.
+      storage: rememberAwareStorage,
+    },
+  },
 );
 
 /* ---------------- role model ---------------- */
@@ -363,9 +372,9 @@ export interface Backend {
   readonly kind: "demo" | "supabase";
   getSessionUserId(): Promise<string | null>;
   onAuthChange(cb: (userId: string | null) => void): () => void;
-  coachSignUp(email: string, password: string, name: string): Promise<void>;
-  coachSignIn(email: string, password: string): Promise<void>;
-  clientSignIn(username: string, password: string): Promise<void>;
+  coachSignUp(email: string, password: string, name: string, remember: boolean): Promise<void>;
+  coachSignIn(email: string, password: string, remember: boolean): Promise<void>;
+  clientSignIn(username: string, password: string, remember: boolean): Promise<void>;
   signOut(): Promise<void>;
   resolveRole(userId: string): Promise<RoleInfo | null>;
   load(): Promise<AppState>;
@@ -410,7 +419,8 @@ class SupabaseBackend implements Backend {
     return () => data.subscription.unsubscribe();
   }
 
-  async coachSignUp(email: string, password: string, name: string): Promise<void> {
+  async coachSignUp(email: string, password: string, name: string, remember: boolean): Promise<void> {
+    setRemember(remember);
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) throw new Error(error.message);
     const userId = data.user?.id;
@@ -420,12 +430,14 @@ class SupabaseBackend implements Backend {
     }
   }
 
-  async coachSignIn(email: string, password: string): Promise<void> {
+  async coachSignIn(email: string, password: string, remember: boolean): Promise<void> {
+    setRemember(remember);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new Error(error.message);
   }
 
-  async clientSignIn(username: string, password: string): Promise<void> {
+  async clientSignIn(username: string, password: string, remember: boolean): Promise<void> {
+    setRemember(remember);
     const { data, error } = await supabase.rpc("client_login_email", { p_username: username });
     if (error) throw new Error(error.message);
     const email = typeof data === "string" ? data : "";
@@ -735,16 +747,29 @@ class DemoBackend implements Backend {
 
   private session(): { userId: string; role: "coach" | "client" } | null {
     try {
-      const raw = localStorage.getItem(DEMO_SESSION_KEY);
+      // A still-live non-remembered (sessionStorage) session takes precedence.
+      const raw = sessionStorage.getItem(DEMO_SESSION_KEY) ?? localStorage.getItem(DEMO_SESSION_KEY);
       return raw ? (JSON.parse(raw) as { userId: string; role: "coach" | "client" }) : null;
     } catch {
       return null;
     }
   }
 
-  private setSession(userId: string | null, role: "coach" | "client" = "coach"): void {
-    if (userId) localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({ userId, role }));
-    else localStorage.removeItem(DEMO_SESSION_KEY);
+  private setSession(userId: string | null, role: "coach" | "client" = "coach", remember = true): void {
+    setRemember(remember);
+    try {
+      if (userId) {
+        const payload = JSON.stringify({ userId, role });
+        (remember ? localStorage : sessionStorage).setItem(DEMO_SESSION_KEY, payload);
+        // Keep the two stores mutually exclusive.
+        (remember ? sessionStorage : localStorage).removeItem(DEMO_SESSION_KEY);
+      } else {
+        localStorage.removeItem(DEMO_SESSION_KEY);
+        sessionStorage.removeItem(DEMO_SESSION_KEY);
+      }
+    } catch {
+      /* storage unavailable — non-fatal */
+    }
     this.listeners.forEach((cb) => cb(userId));
   }
 
@@ -757,26 +782,26 @@ class DemoBackend implements Backend {
     return () => this.listeners.delete(cb);
   }
 
-  async coachSignUp(_email: string, password: string, _name: string): Promise<void> {
+  async coachSignUp(_email: string, password: string, _name: string, remember: boolean): Promise<void> {
     if (password !== DEMO_PASSWORD) throw new Error(`Demo mode: use password "${DEMO_PASSWORD}".`);
-    this.setSession(DEMO_COACH_ID, "coach");
+    this.setSession(DEMO_COACH_ID, "coach", remember);
   }
 
-  async coachSignIn(email: string, password: string): Promise<void> {
+  async coachSignIn(email: string, password: string, remember: boolean): Promise<void> {
     if (email.trim().toLowerCase() !== DEMO_COACH_EMAIL || password !== DEMO_PASSWORD) {
       throw new Error(`Demo mode: use ${DEMO_COACH_EMAIL} / ${DEMO_PASSWORD}.`);
     }
-    this.setSession(DEMO_COACH_ID, "coach");
+    this.setSession(DEMO_COACH_ID, "coach", remember);
   }
 
-  async clientSignIn(username: string, password: string): Promise<void> {
+  async clientSignIn(username: string, password: string, remember: boolean): Promise<void> {
     const store = readDemo();
     const uname = username.trim().toLowerCase();
     const client = store.state.clients.find((c) => c.username.toLowerCase() === uname);
     if (!client) throw new Error("Invalid username or password.");
     const entry = store.auth[client.id];
     if (!entry || entry.password !== password) throw new Error("Invalid username or password.");
-    this.setSession(client.id, "client");
+    this.setSession(client.id, "client", remember);
   }
 
   async signOut(): Promise<void> {
