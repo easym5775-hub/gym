@@ -1,17 +1,19 @@
 /* ================================================================
-   FORGE — form modals shared across coach pages.
+   FORGE — all form modals (client, exercise, plan, meal, nutrition,
+   subscription, payment, session, password reset, photo viewer).
    ================================================================ */
 
 import { useEffect, useState, type ChangeEvent } from "react";
-import { Image as ImageIcon, Camera, RefreshCw, X } from "lucide-react";
+import { Dumbbell, Image as ImageIcon, RefreshCw, X } from "lucide-react";
 import type {
   Client,
+  ClientStatus,
   Exercise,
   ExerciseCategory,
   Goal,
-  ClientStatus,
   Meal,
   MealType,
+  NutritionTargets,
   Payment,
   PaymentMethod,
   PaymentStatus,
@@ -30,10 +32,9 @@ import {
   STATUSES,
   WEEK_DAYS,
 } from "../types";
-import { fileToDataUrl, isValidUsername, randomPassword, todayISO, errorMessage } from "../lib";
-import type { NewClientInput } from "../services/backend";
+import { fileToDataUrl, isValidUsername, randomPassword, todayISO } from "../lib";
 import { useApp } from "../store";
-import { Modal, btnPrimary, btnSecondary, btnGhost, btnSm, inputCls, textareaCls, labelCls } from "./ui";
+import { Modal, btnPrimary, btnSecondary, inputCls, labelCls, textareaCls } from "./ui";
 
 /* ---------------- shared photo field ---------------- */
 
@@ -66,12 +67,11 @@ function PhotoField({
           <img src={value} alt="Preview" className="h-16 w-16 rounded-lg object-cover ring-1 ring-night-600" />
         ) : (
           <span className="grid h-16 w-16 place-items-center rounded-lg border border-dashed border-night-500 text-night-400">
-            <Camera className="h-6 w-6" />
+            <ImageIcon className="h-6 w-6" />
           </span>
         )}
         <div className="flex flex-col items-start gap-1.5">
-          <label className={`${btnGhost} ${btnSm} cursor-pointer`}>
-            <ImageIcon className="h-4 w-4" />
+          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-night-600 bg-night-800 px-3 py-1.5 text-xs font-bold text-mist-200 transition hover:border-night-500 hover:bg-night-700">
             {value ? "Replace" : "Upload"}
             <input type="file" accept="image/*" className="hidden" onChange={pick} />
           </label>
@@ -87,7 +87,7 @@ function PhotoField({
   );
 }
 
-/* ---------------- client create / edit ---------------- */
+/* ---------------- client form (create = username+password) ---------------- */
 
 export function ClientFormModal({
   open,
@@ -100,9 +100,7 @@ export function ClientFormModal({
   onClose: () => void;
   onSaved?: (c: Client) => void;
 }) {
-  const { createClient, updateClient, toast } = useApp();
-  const creating = initial === null;
-
+  const { createClient, updateClient } = useApp();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -116,7 +114,7 @@ export function ClientFormModal({
   const [notes, setNotes] = useState("");
   const [photo, setPhoto] = useState<string | undefined>(undefined);
   const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -133,47 +131,19 @@ export function ClientFormModal({
     setNotes(initial?.notes ?? "");
     setPhoto(initial?.photo);
     setError("");
-    setSaving(false);
+    setBusy(false);
   }, [open, initial]);
 
   const save = async () => {
-    setError("");
-    if (!name.trim()) {
-      setError("Client name is required.");
-      return;
+    if (!name.trim()) return setError("Client name is required.");
+    if (!initial) {
+      if (!isValidUsername(username.trim())) return setError("Username must be 3–24 chars: letters, numbers, dots, dashes.");
+      if (password.length < 6) return setError("Password must be at least 6 characters.");
     }
-    setSaving(true);
+    setBusy(true);
+    setError("");
     try {
-      if (creating) {
-        const uname = username.trim().toLowerCase();
-        if (!isValidUsername(uname)) {
-          setError("Username must be 3–24 chars: letters, numbers, dots, dashes.");
-          setSaving(false);
-          return;
-        }
-        if (password.length < 6) {
-          setError("Password must be at least 6 characters.");
-          setSaving(false);
-          return;
-        }
-        const input: NewClientInput = {
-          username: uname,
-          password,
-          name: name.trim(),
-          email: email.trim(),
-          phone: phone.trim(),
-          gender,
-          age: age.trim() === "" ? undefined : Math.max(0, Number(age) || 0),
-          goal,
-          status,
-          startDate,
-          notes: notes.trim(),
-          photo,
-        };
-        const c = await createClient(input);
-        onSaved?.(c);
-        onClose();
-      } else if (initial) {
+      if (initial) {
         updateClient({
           ...initial,
           name: name.trim(),
@@ -188,44 +158,73 @@ export function ClientFormModal({
           photo,
         });
         onClose();
+      } else {
+        const c = await createClient({
+          username: username.trim().toLowerCase(),
+          password,
+          name: name.trim(),
+          email: email.trim() || undefined,
+          phone: phone.trim() || undefined,
+          age: age.trim() === "" ? undefined : Math.max(0, Number(age) || 0),
+          gender,
+          goal,
+          status,
+          startDate,
+          notes: notes.trim() || undefined,
+          photo,
+        });
+        onSaved?.(c);
+        onClose();
       }
     } catch (e) {
-      setError(errorMessage(e));
-      setSaving(false);
+      setError(e instanceof Error ? e.message : "Couldn't save the client.");
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={creating ? "New client" : "Edit client"} description={creating ? "Create their login — they sign in with username + password." : undefined} wide>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={initial ? "Edit client" : "New client"}
+      description={initial ? undefined : "Pick the username & password they'll sign in with."}
+      wide
+    >
       <div className="grid gap-4 sm:grid-cols-2">
-        {creating && (
+        <PhotoField value={photo} onChange={setPhoto} />
+        <div>
+          <label className={labelCls}>Name *</label>
+          <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="Alex Morgan" />
+        </div>
+        {!initial && (
           <>
             <div>
-              <label className={labelCls}>Username *</label>
-              <input className={inputCls} value={username} onChange={(e) => setUsername(e.target.value)} placeholder="ahmed" autoComplete="off" />
+              <label className={labelCls}>Login username *</label>
+              <input className={inputCls} value={username} onChange={(e) => setUsername(e.target.value)} placeholder="alex.m" autoComplete="off" />
             </div>
             <div>
-              <label className={labelCls}>Password *</label>
+              <label className={labelCls}>Login password *</label>
               <div className="flex gap-2">
                 <input className={inputCls} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="min 6 chars" autoComplete="new-password" />
-                <button type="button" className={`${btnGhost} ${btnSm} shrink-0`} onClick={() => setPassword(randomPassword())} title="Generate a password">
-                  <RefreshCw className="h-3.5 w-3.5" /> Gen
+                <button
+                  type="button"
+                  className="shrink-0 cursor-pointer rounded-lg border border-night-600 bg-night-800 px-3 text-mist-400 transition hover:border-volt-400 hover:text-volt-300"
+                  onClick={() => setPassword(randomPassword())}
+                  title="Generate a random password"
+                >
+                  <RefreshCw className="h-4 w-4" />
                 </button>
               </div>
             </div>
           </>
         )}
-        <PhotoField value={photo} onChange={setPhoto} />
         <div>
-          <label className={labelCls}>Name *</label>
-          <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="Ahmed Samir" />
+          <label className={labelCls}>Contact email</label>
+          <input className={inputCls} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="alex@email.com" />
         </div>
         <div>
-          <label className={labelCls}>Email</label>
-          <input className={inputCls} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="optional" />
-        </div>
-        <div>
-          <label className={labelCls}>Phone</label>
+          <label className={labelCls}>Phone (WhatsApp)</label>
           <input className={inputCls} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+20 101 234 5678" />
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -265,15 +264,15 @@ export function ClientFormModal({
         </div>
         <div className="sm:col-span-2">
           <label className={labelCls}>Notes</label>
-          <textarea className={`${textareaCls} min-h-20 resize-y`} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Injuries, preferences, schedule…" />
+          <textarea className={textareaCls} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Injuries, preferences, schedule…" />
         </div>
       </div>
-      {error && <p className="mt-3 text-xs font-bold text-danger-400">{error}</p>}
+      {error && <p className="mt-3 rounded-lg border border-danger-500/25 bg-danger-500/10 px-3 py-2 text-xs font-bold text-danger-300">{error}</p>}
       <div className="mt-5 flex gap-2">
-        <button className={`${btnPrimary} flex-1`} onClick={save} disabled={saving}>
-          {saving ? "Saving…" : creating ? "Create client" : "Save changes"}
+        <button className={`${btnPrimary} flex-1`} onClick={() => void save()} disabled={busy}>
+          {busy ? "Saving…" : initial ? "Save changes" : "Create client"}
         </button>
-        <button className={btnSecondary} onClick={onClose} disabled={saving}>
+        <button className={btnSecondary} onClick={onClose}>
           Cancel
         </button>
       </div>
@@ -281,17 +280,9 @@ export function ClientFormModal({
   );
 }
 
-/* ---------------- exercise ---------------- */
+/* ---------------- exercise form ---------------- */
 
-export function ExerciseFormModal({
-  open,
-  initial,
-  onClose,
-}: {
-  open: boolean;
-  initial: Exercise | null;
-  onClose: () => void;
-}) {
+export function ExerciseFormModal({ open, initial, onClose }: { open: boolean; initial: Exercise | null; onClose: () => void }) {
   const { addExercise, updateExercise } = useApp();
   const [name, setName] = useState("");
   const [category, setCategory] = useState<ExerciseCategory>("Chest");
@@ -309,10 +300,7 @@ export function ExerciseFormModal({
   }, [open, initial]);
 
   const save = () => {
-    if (!name.trim()) {
-      setError("Exercise name is required.");
-      return;
-    }
+    if (!name.trim()) return setError("Exercise name is required.");
     const data = { name: name.trim(), category, description: description.trim(), videoUrl: videoUrl.trim() };
     if (initial) updateExercise({ ...initial, ...data });
     else addExercise(data);
@@ -320,8 +308,8 @@ export function ExerciseFormModal({
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={initial ? "Edit exercise" : "New exercise"} wide>
-      <div className="grid gap-4 sm:grid-cols-2">
+    <Modal open={open} onClose={onClose} title={initial ? "Edit exercise" : "New exercise"}>
+      <div className="grid gap-4">
         <div>
           <label className={labelCls}>Exercise name *</label>
           <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="Goblet Squat" />
@@ -334,13 +322,13 @@ export function ExerciseFormModal({
             ))}
           </select>
         </div>
-        <div className="sm:col-span-2">
+        <div>
           <label className={labelCls}>Video URL (YouTube)</label>
           <input className={inputCls} value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://youtube.com/…" />
         </div>
-        <div className="sm:col-span-2">
-          <label className={labelCls}>Coaching cues / description</label>
-          <textarea className={`${textareaCls} min-h-20 resize-y`} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Setup, tempo, common mistakes…" />
+        <div>
+          <label className={labelCls}>Coaching cues</label>
+          <textarea className={textareaCls} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Setup, tempo, common mistakes…" />
         </div>
       </div>
       {error && <p className="mt-3 text-xs font-bold text-danger-400">{error}</p>}
@@ -356,7 +344,7 @@ export function ExerciseFormModal({
   );
 }
 
-/* ---------------- plan item ---------------- */
+/* ---------------- plan item form ---------------- */
 
 export function PlanItemFormModal({
   open,
@@ -388,10 +376,7 @@ export function PlanItemFormModal({
   }, [open, initial, state.exercises]);
 
   const save = () => {
-    if (!exerciseId) {
-      toast("Add an exercise to the library first", "warn");
-      return;
-    }
+    if (!exerciseId) return toast("Add an exercise to the library first", "warn");
     const data = {
       exerciseId,
       sets: Math.max(1, Number(sets) || 1),
@@ -421,7 +406,9 @@ export function PlanItemFormModal({
                 </option>
               ))}
             </select>
-            {picked && picked.description && <p className="mt-2 rounded-lg bg-night-800 p-2.5 text-xs leading-5 text-mist-400">{picked.description}</p>}
+            {picked && picked.description && (
+              <p className="mt-2 rounded-lg bg-night-800 p-2.5 text-xs leading-5 text-mist-400">{picked.description}</p>
+            )}
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
@@ -455,7 +442,7 @@ export function PlanItemFormModal({
   );
 }
 
-/* ---------------- meal ---------------- */
+/* ---------------- meal form ---------------- */
 
 export function MealFormModal({
   open,
@@ -491,10 +478,7 @@ export function MealFormModal({
   }, [open, initial, defaultType]);
 
   const save = () => {
-    if (!description.trim()) {
-      setError("Describe the meal first.");
-      return;
-    }
+    if (!description.trim()) return setError("Describe the meal first.");
     const data = {
       type,
       description: description.trim(),
@@ -530,7 +514,7 @@ export function MealFormModal({
         </div>
         <div>
           <label className={labelCls}>Food description *</label>
-          <textarea className={`${textareaCls} min-h-16 resize-y`} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Grilled chicken, rice, salad…" />
+          <textarea className={textareaCls} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Grilled chicken, rice, salad…" />
         </div>
         <div className="grid grid-cols-4 gap-2">
           {[
@@ -559,7 +543,70 @@ export function MealFormModal({
   );
 }
 
-/* ---------------- subscription ---------------- */
+/* ---------------- nutrition targets ---------------- */
+
+export function NutritionTargetsModal({ open, clientId, onClose }: { open: boolean; clientId: string; onClose: () => void }) {
+  const { state, setNutritionTargets } = useApp();
+  const current = state.clients.find((c) => c.id === clientId)?.nutritionTargets;
+  const [calories, setCalories] = useState("2200");
+  const [protein, setProtein] = useState("160");
+  const [carbs, setCarbs] = useState("220");
+  const [fats, setFats] = useState("70");
+  const [water, setWater] = useState("3");
+
+  useEffect(() => {
+    if (!open) return;
+    setCalories(String(current?.calories ?? 2200));
+    setProtein(String(current?.protein ?? 160));
+    setCarbs(String(current?.carbs ?? 220));
+    setFats(String(current?.fats ?? 70));
+    setWater(String(current?.water ?? 3));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, clientId]);
+
+  const save = () => {
+    const targets: NutritionTargets = {
+      calories: Math.max(0, Number(calories) || 0),
+      protein: Math.max(0, Number(protein) || 0),
+      carbs: Math.max(0, Number(carbs) || 0),
+      fats: Math.max(0, Number(fats) || 0),
+      water: Math.max(0, Number(water) || 0),
+    };
+    setNutritionTargets(clientId, targets);
+    onClose();
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="Nutrition targets" description="Daily targets the client aims for.">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {[
+          { l: "Calories", v: calories, s: setCalories, u: "kcal" },
+          { l: "Protein", v: protein, s: setProtein, u: "g" },
+          { l: "Carbs", v: carbs, s: setCarbs, u: "g" },
+          { l: "Fats", v: fats, s: setFats, u: "g" },
+          { l: "Water", v: water, s: setWater, u: "L" },
+        ].map((f) => (
+          <div key={f.l}>
+            <label className={labelCls}>
+              {f.l} <span className="normal-case text-mist-500">({f.u})</span>
+            </label>
+            <input className={inputCls} type="number" min={0} step={f.u === "L" ? 0.5 : 10} value={f.v} onChange={(e) => f.s(e.target.value)} />
+          </div>
+        ))}
+      </div>
+      <div className="mt-5 flex gap-2">
+        <button className={`${btnPrimary} flex-1`} onClick={save}>
+          Save targets
+        </button>
+        <button className={btnSecondary} onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/* ---------------- subscription form ---------------- */
 
 export function SubscriptionFormModal({
   open,
@@ -610,11 +657,11 @@ export function SubscriptionFormModal({
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelCls}>Start date</label>
+            <label className={labelCls}>Start</label>
             <input className={inputCls} type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           </div>
           <div>
-            <label className={labelCls}>End date</label>
+            <label className={labelCls}>End</label>
             <input className={inputCls} type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
           </div>
         </div>
@@ -645,7 +692,7 @@ export function SubscriptionFormModal({
   );
 }
 
-/* ---------------- payment ---------------- */
+/* ---------------- payment form ---------------- */
 
 export function PaymentFormModal({
   open,
@@ -655,15 +702,14 @@ export function PaymentFormModal({
   onClose,
 }: {
   open: boolean;
-  /** When null the coach picks the client (quick-add from dashboard). */
-  clientId: string | null;
+  clientId: string | null; // null → pick client inside (quick-add from dashboard)
   initial: Payment | null;
   subscriptions: Subscription[];
   onClose: () => void;
 }) {
   const { state, addPayment, updatePayment, toast } = useApp();
   const [picked, setPicked] = useState("");
-  const [amount, setAmount] = useState("1500");
+  const [amount, setAmount] = useState("1200");
   const [date, setDate] = useState(todayISO());
   const [method, setMethod] = useState<PaymentMethod>("Cash");
   const [status, setStatus] = useState<PaymentStatus>("Paid");
@@ -673,20 +719,19 @@ export function PaymentFormModal({
   useEffect(() => {
     if (!open) return;
     setPicked(clientId ?? state.clients[0]?.id ?? "");
-    setAmount(String(initial?.amount ?? 1500));
+    setAmount(String(initial?.amount ?? 1200));
     setDate(initial?.date ?? todayISO());
     setMethod(initial?.method ?? "Cash");
     setStatus(initial?.status ?? "Paid");
-    setSubscriptionId(initial?.subscriptionId ?? subscriptions[0]?.id ?? "");
+    setSubscriptionId(initial?.subscriptionId ?? "");
     setNotes(initial?.notes ?? "");
-  }, [open, initial, clientId, subscriptions, state.clients]);
+  }, [open, initial, clientId, state.clients]);
+
+  const subOptions = subscriptions.filter((s) => s.clientId === (clientId ?? picked));
 
   const save = () => {
     const target = clientId ?? picked;
-    if (!target) {
-      toast("Pick a client first", "warn");
-      return;
-    }
+    if (!target) return toast("Pick a client first", "warn");
     const data = {
       amount: Math.max(0, Number(amount) || 0),
       date,
@@ -699,8 +744,6 @@ export function PaymentFormModal({
     else addPayment({ clientId: target, ...data });
     onClose();
   };
-
-  const subOptions = clientId ? subscriptions.filter((s) => s.clientId === clientId) : subscriptions;
 
   return (
     <Modal open={open} onClose={onClose} title={initial ? "Edit payment" : "Record payment"}>
@@ -757,7 +800,7 @@ export function PaymentFormModal({
         </div>
         <div>
           <label className={labelCls}>Notes</label>
-          <input className={inputCls} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Transfer ref, instalment…" />
+          <input className={inputCls} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" />
         </div>
       </div>
       <div className="mt-5 flex gap-2">
@@ -772,7 +815,7 @@ export function PaymentFormModal({
   );
 }
 
-/* ---------------- session ---------------- */
+/* ---------------- session form ---------------- */
 
 export function SessionFormModal({
   open,
@@ -782,8 +825,7 @@ export function SessionFormModal({
   onClose,
 }: {
   open: boolean;
-  /** When null the coach picks the client (quick-add from dashboard). */
-  clientId: string | null;
+  clientId: string | null; // null → pick client inside
   initial: Session | null;
   presetDate?: string;
   onClose: () => void;
@@ -808,10 +850,7 @@ export function SessionFormModal({
 
   const save = () => {
     const target = clientId ?? picked;
-    if (!target) {
-      toast("Pick a client first", "warn");
-      return;
-    }
+    if (!target) return toast("Pick a client first", "warn");
     const data = { date, time, type: type.trim() || "Training", status, notes: notes.trim() };
     if (initial) updateSession({ ...initial, ...data });
     else addSession({ clientId: target, ...data });
@@ -819,7 +858,7 @@ export function SessionFormModal({
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={initial ? "Edit session" : "Book session"}>
+    <Modal open={open} onClose={onClose} title={initial ? "Edit session" : "Book session"} description="Attendance is derived from session outcomes.">
       <div className="grid gap-4">
         {clientId === null && (
           <div>
@@ -859,7 +898,7 @@ export function SessionFormModal({
         </div>
         <div>
           <label className={labelCls}>Notes</label>
-          <input className={inputCls} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Focus, equipment, location…" />
+          <input className={inputCls} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Focus, equipment…" />
         </div>
       </div>
       <div className="mt-5 flex gap-2">
@@ -874,65 +913,52 @@ export function SessionFormModal({
   );
 }
 
-/* ---------------- nutrition targets ---------------- */
+/* ---------------- reset client password ---------------- */
 
-export function NutritionTargetsModal({
-  open,
-  clientId,
-  onClose,
-}: {
-  open: boolean;
-  clientId: string;
-  onClose: () => void;
-}) {
-  const { state, setNutritionTargets } = useApp();
-  const client = state.clients.find((c) => c.id === clientId);
-  const [calories, setCalories] = useState("2200");
-  const [protein, setProtein] = useState("160");
-  const [carbs, setCarbs] = useState("220");
-  const [fats, setFats] = useState("70");
-  const [water, setWater] = useState("3");
+export function ResetPasswordModal({ open, clientId, onClose }: { open: boolean; clientId: string; onClose: () => void }) {
+  const { resetClientPassword } = useApp();
+  const [pw, setPw] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
-    const t = client?.nutritionTargets;
-    setCalories(String(t?.calories ?? 2200));
-    setProtein(String(t?.protein ?? 160));
-    setCarbs(String(t?.carbs ?? 220));
-    setFats(String(t?.fats ?? 70));
-    setWater(String(t?.water ?? 3));
-  }, [open, client]);
+    if (open) {
+      setPw("");
+      setErr("");
+      setBusy(false);
+    }
+  }, [open]);
 
-  const save = () => {
-    setNutritionTargets(clientId, {
-      calories: Math.max(0, Number(calories) || 0),
-      protein: Math.max(0, Number(protein) || 0),
-      carbs: Math.max(0, Number(carbs) || 0),
-      fats: Math.max(0, Number(fats) || 0),
-      water: Math.max(0, Number(water) || 0),
-    });
-    onClose();
+  const save = async () => {
+    if (pw.length < 6) return setErr("Password must be at least 6 characters.");
+    setBusy(true);
+    try {
+      await resetClientPassword(clientId, pw);
+      onClose();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Couldn't reset the password.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Nutrition targets" description={`Daily targets for ${client?.name ?? "client"}`}>
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          { l: "Calories (kcal)", v: calories, s: setCalories },
-          { l: "Protein (g)", v: protein, s: setProtein },
-          { l: "Carbs (g)", v: carbs, s: setCarbs },
-          { l: "Fats (g)", v: fats, s: setFats },
-          { l: "Water (L)", v: water, s: setWater },
-        ].map((f) => (
-          <div key={f.l}>
-            <label className={labelCls}>{f.l}</label>
-            <input className={inputCls} type="number" min={0} value={f.v} onChange={(e) => f.s(e.target.value)} />
-          </div>
-        ))}
+    <Modal open={open} onClose={onClose} title="Reset client password" description="Set a new sign-in password for this client.">
+      <div className="flex gap-2">
+        <input className={inputCls} value={pw} onChange={(e) => setPw(e.target.value)} placeholder="New password (min 6 chars)" autoComplete="new-password" />
+        <button
+          type="button"
+          className="shrink-0 cursor-pointer rounded-lg border border-night-600 bg-night-800 px-3 text-mist-400 transition hover:border-volt-400 hover:text-volt-300"
+          onClick={() => setPw(randomPassword())}
+          title="Generate a random password"
+        >
+          <RefreshCw className="h-4 w-4" />
+        </button>
       </div>
+      {err && <p className="mt-2 text-xs font-bold text-danger-400">{err}</p>}
       <div className="mt-5 flex gap-2">
-        <button className={`${btnPrimary} flex-1`} onClick={save}>
-          Save targets
+        <button className={`${btnPrimary} flex-1`} onClick={() => void save()} disabled={busy}>
+          {busy ? "Resetting…" : "Reset password"}
         </button>
         <button className={btnSecondary} onClick={onClose}>
           Cancel
@@ -947,7 +973,7 @@ export function NutritionTargetsModal({
 export function PhotoModal({ src, onClose }: { src: string | null; onClose: () => void }) {
   if (!src) return null;
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-6">
       <div className="animate-fade absolute inset-0 bg-night-950/90" onClick={onClose} />
       <div className="animate-pop relative">
         <img src={src} alt="Progress" className="max-h-[80vh] max-w-full rounded-xl ring-1 ring-night-600" />
@@ -962,3 +988,5 @@ export function PhotoModal({ src, onClose }: { src: string | null; onClose: () =
     </div>
   );
 }
+
+void Dumbbell;

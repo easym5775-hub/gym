@@ -1,10 +1,7 @@
 /* ================================================================
    FORGE — app store (React Context).
-
-   Holds the current AppState + session role, exposes CRUD action
-   creators. Mutations update local state optimistically and persist to
-   the active backend (Supabase or demo); on failure the store resyncs
-   from the backend so the UI never shows an unsaved change as truth.
+   Backend is the source of truth; local state updates optimistically
+   and re-syncs if a write fails.
    ================================================================ */
 
 import {
@@ -17,12 +14,14 @@ import {
   type ReactNode,
 } from "react";
 import type {
+  AppNotification,
   AppState,
   CheckIn,
   Client,
   CoachNote,
   Exercise,
   Meal,
+  NewClientInput,
   NutritionTargets,
   Payment,
   PlanItem,
@@ -33,19 +32,20 @@ import type {
 import { errorMessage, todayISO, uid, uuid } from "./lib";
 import {
   backend,
+  isDemoMode,
+  type RoleInfo,
   checkInToRow,
   clientToRow,
   exerciseToRow,
   mealToRow,
+  messageToRow,
+  notificationToRow,
   paymentToRow,
   planToRow,
   sessionToRow,
   subscriptionToRow,
-  type NewClientInput,
-  type RoleInfo,
 } from "./services/backend";
 import { getSessionUserId, onAuthChange, resolveRole } from "./services/auth";
-import { isDemoMode } from "./services/supabase";
 
 export type Phase = "booting" | "signed-out" | "loading" | "ready";
 
@@ -67,7 +67,6 @@ interface Store {
 
   reload: () => Promise<void>;
 
-  /* clients (account lifecycle goes through the edge function) */
   createClient: (input: NewClientInput) => Promise<Client>;
   updateClient: (client: Client) => void;
   deleteClient: (id: string) => void;
@@ -107,6 +106,12 @@ interface Store {
   markFollowUpDone: (clientId: string) => void;
   setNutritionTargets: (clientId: string, targets: NutritionTargets) => void;
 
+  sendMessage: (clientId: string, text: string) => void;
+  addNotification: (input: { clientId: string; kind: AppNotification["kind"]; text: string }) => void;
+  markNotificationRead: (id: string) => void;
+  markAllNotificationsRead: (clientId: string) => void;
+
+  updateCoachName: (name: string) => Promise<void>;
   resetData: () => Promise<void>;
 }
 
@@ -121,6 +126,8 @@ const EMPTY: AppState = {
   subscriptions: [],
   payments: [],
   sessions: [],
+  messages: [],
+  notifications: [],
 };
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -131,7 +138,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const stateRef = useRef(state);
   const meRef = useRef(me);
-  const phaseRef = useRef(phase);
+  const activeUserRef = useRef<string | null>(null);
   const timersRef = useRef<number[]>([]);
 
   useEffect(() => {
@@ -140,9 +147,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     meRef.current = me;
   }, [me]);
-  useEffect(() => {
-    phaseRef.current = phase;
-  }, [phase]);
   useEffect(() => () => timersRef.current.forEach(clearTimeout), []);
 
   /* ---------------- toasts ---------------- */
@@ -160,7 +164,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [dismiss],
   );
 
-  /* ---------------- load / auth bootstrap ---------------- */
+  /* ---------------- session bootstrap ---------------- */
 
   const reload = useCallback(async () => {
     try {
@@ -171,27 +175,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [toast]);
 
   const bootSession = useCallback(
-    async (userId: string | null) => {
-      if (!userId) {
-        setMe(null);
-        setState(EMPTY);
-        setPhase("signed-out");
-        return;
-      }
+    async (userId: string) => {
+      if (activeUserRef.current === userId) return;
+      activeUserRef.current = userId;
       setPhase("loading");
       try {
         const role = await resolveRole(userId);
         if (!role) {
+          activeUserRef.current = null;
           setMe(null);
           setState(EMPTY);
           setPhase("signed-out");
-          toast("That account has no FORGE profile.", "warn");
           return;
         }
-        setMe(role);
         setState(await backend.load());
+        setMe(role);
         setPhase("ready");
       } catch (e) {
+        activeUserRef.current = null;
         setMe(null);
         setState(EMPTY);
         setPhase("signed-out");
@@ -205,10 +206,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     (async () => {
       const userId = await getSessionUserId();
-      if (!cancelled) await bootSession(userId);
+      if (!cancelled) {
+        if (userId) await bootSession(userId);
+        else setPhase("signed-out");
+      }
     })();
     const off = onAuthChange((userId) => {
-      if (!cancelled) void bootSession(userId);
+      if (cancelled) return;
+      if (!userId) {
+        activeUserRef.current = null;
+        setMe(null);
+        setState(EMPTY);
+        setPhase("signed-out");
+      } else {
+        activeUserRef.current = null; // force re-boot on sign-in
+        void bootSession(userId);
+      }
     });
     return () => {
       cancelled = true;
@@ -220,10 +233,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const coachId = () => meRef.current?.coachId ?? "";
 
-  /**
-   * Optimistically apply `recipe`, then persist. On failure resync from the
-   * backend so the UI reflects what was actually saved, and warn the user.
-   */
+  /** Optimistic local update + persist; re-sync and warn on failure. */
   const mutate = useCallback(
     (recipe: (s: AppState) => AppState, persist: () => Promise<unknown>, okMsg?: string) => {
       setState(recipe);
@@ -237,6 +247,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         });
     },
     [toast, reload],
+  );
+
+  /** Push an in-app notification onto a client's feed (coach-triggered). */
+  const addNotification = useCallback(
+    (input: { clientId: string; kind: AppNotification["kind"]; text: string }) => {
+      const n: AppNotification = {
+        id: uuid(),
+        coachId: coachId(),
+        clientId: input.clientId,
+        kind: input.kind,
+        text: input.text,
+        createdAt: Date.now(),
+        read: false,
+      };
+      mutate(
+        (s) => ({ ...s, notifications: [...s.notifications, n] }),
+        () => backend.insert("notifications", notificationToRow(n)),
+      );
+    },
+    [mutate],
   );
 
   /* ---------------- clients ---------------- */
@@ -275,6 +305,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           subscriptions: s.subscriptions.filter((x) => x.clientId !== id),
           payments: s.payments.filter((x) => x.clientId !== id),
           sessions: s.sessions.filter((x) => x.clientId !== id),
+          messages: s.messages.filter((x) => x.clientId !== id),
+          notifications: s.notifications.filter((x) => x.clientId !== id),
         }),
         () => backend.deleteClientAccount(id),
       );
@@ -284,9 +316,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const resetClientPassword = useCallback(
-    async (clientId: string, newPassword: string) => {
+    async (clientId: string, newPassword: string): Promise<void> => {
       await backend.resetClientPassword(clientId, newPassword);
-      toast("Client password reset");
+      toast("Password reset — share it securely");
     },
     [toast],
   );
@@ -342,8 +374,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         () => backend.insert("plan_items", planToRow(item)),
         "Exercise added to plan",
       );
+      addNotification({ clientId: item.clientId, kind: "plan_updated", text: "Your workout plan was updated" });
     },
-    [mutate],
+    [mutate, addNotification],
   );
 
   const updatePlanItem = useCallback(
@@ -353,8 +386,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         () => backend.update("plan_items", item.id, planToRow(item)),
         "Plan updated",
       );
+      addNotification({ clientId: item.clientId, kind: "plan_updated", text: "Your workout plan was updated" });
     },
-    [mutate],
+    [mutate, addNotification],
   );
 
   const deletePlanItem = useCallback(
@@ -378,8 +412,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         () => backend.insert("meals", mealToRow(meal)),
         "Meal added",
       );
+      addNotification({ clientId: meal.clientId, kind: "meal_updated", text: "Your meal plan was updated" });
     },
-    [mutate],
+    [mutate, addNotification],
   );
 
   const updateMeal = useCallback(
@@ -389,8 +424,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         () => backend.update("meals", meal.id, mealToRow(meal)),
         "Meal updated",
       );
+      addNotification({ clientId: meal.clientId, kind: "meal_updated", text: "Your meal plan was updated" });
     },
-    [mutate],
+    [mutate, addNotification],
   );
 
   const deleteMeal = useCallback(
@@ -433,15 +469,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const addSubscription = useCallback(
     (input: Omit<Subscription, "id" | "createdAt" | "coachId">) => {
-      const sub: Subscription = { ...input, id: uuid(), createdAt: Date.now(), coachId: coachId() };
+      const sub: Subscription = { ...input, id: uuid(), coachId: coachId(), createdAt: Date.now() };
       mutate(
         (s) => ({ ...s, subscriptions: [...s.subscriptions, sub] }),
         () => backend.insert("subscriptions", subscriptionToRow(sub)),
         "Subscription added",
       );
+      addNotification({ clientId: sub.clientId, kind: "subscription", text: `New subscription: ${sub.planName}` });
       return sub;
     },
-    [mutate],
+    [mutate, addNotification],
   );
 
   const updateSubscription = useCallback(
@@ -461,9 +498,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const start = sub.endDate >= today ? sub.endDate : today;
       const length = Math.max(
         1,
-        Math.round((new Date(sub.endDate).getTime() - new Date(sub.startDate).getTime()) / 86_400_000),
+        Math.round((new Date(sub.endDate + "T12:00:00").getTime() - new Date(sub.startDate + "T12:00:00").getTime()) / 86_400_000),
       );
-      const end = new Date(start);
+      const end = new Date(start + "T12:00:00");
       end.setDate(end.getDate() + length);
       const endIso = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
       const next: Subscription = {
@@ -479,9 +516,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         () => backend.insert("subscriptions", subscriptionToRow(next)),
         "Subscription renewed — history preserved",
       );
+      addNotification({ clientId: sub.clientId, kind: "subscription", text: "Your subscription was renewed" });
       return next;
     },
-    [mutate],
+    [mutate, addNotification],
   );
 
   const addPayment = useCallback(
@@ -609,11 +647,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const deleteCoachNote = useCallback(
     (clientId: string, noteId: string) => {
       const cur = stateRef.current.clients.find((c) => c.id === clientId);
-      patchClient(
-        clientId,
-        { coachNotes: (cur?.coachNotes ?? []).filter((n) => n.id !== noteId) },
-        "Note deleted",
-      );
+      patchClient(clientId, { coachNotes: (cur?.coachNotes ?? []).filter((n) => n.id !== noteId) }, "Note deleted");
     },
     [patchClient],
   );
@@ -639,15 +673,109 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [patchClient],
   );
 
+  /* ---------------- chat ---------------- */
+
+  const sendMessage = useCallback(
+    (clientId: string, text: string) => {
+      const role = meRef.current?.role ?? "coach";
+      const msg = {
+        id: uuid(),
+        coachId: coachId(),
+        clientId,
+        senderRole: role,
+        text: text.trim(),
+        createdAt: Date.now(),
+      };
+      const notify: AppNotification | null =
+        role === "coach"
+          ? {
+              id: uuid(),
+              coachId: coachId(),
+              clientId,
+              kind: "message",
+              text: "New message from your coach",
+              createdAt: Date.now(),
+              read: false,
+            }
+          : null;
+      mutate(
+        (s) => ({
+          ...s,
+          messages: [...s.messages, msg],
+          notifications: notify ? [...s.notifications, notify] : s.notifications,
+        }),
+        async () => {
+          await backend.insert("messages", messageToRow(msg));
+          if (notify) await backend.insert("notifications", notificationToRow(notify));
+        },
+        "Message sent",
+      );
+    },
+    [mutate],
+  );
+
+  const markNotificationRead = useCallback(
+    (id: string) => {
+      mutate(
+        (s) => ({
+          ...s,
+          notifications: s.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
+        }),
+        () => backend.update("notifications", id, { read: true }),
+      );
+    },
+    [mutate],
+  );
+
+  const markAllNotificationsRead = useCallback(
+    (clientId: string) => {
+      const unread = stateRef.current.notifications.filter((n) => n.clientId === clientId && !n.read);
+      if (unread.length === 0) return;
+      mutate(
+        (s) => ({
+          ...s,
+          notifications: s.notifications.map((n) =>
+            n.clientId === clientId && !n.read ? { ...n, read: true } : n,
+          ),
+        }),
+        () => Promise.all(unread.map((n) => backend.update("notifications", n.id, { read: true }))),
+        "All notifications marked as read",
+      );
+    },
+    [mutate],
+  );
+
+  /* ---------------- coach profile / demo ---------------- */
+
+  const updateCoachName = useCallback(
+    async (name: string) => {
+      const prev = meRef.current;
+      if (prev) setMe({ ...prev, name });
+      try {
+        await backend.updateCoachName(name);
+        toast("Profile updated");
+      } catch (e) {
+        if (prev) setMe(prev);
+        toast(`Couldn't save — ${errorMessage(e)}`, "warn");
+      }
+    },
+    [toast],
+  );
+
   const resetData = useCallback(async () => {
     if (!isDemoMode) {
       toast("Reset is only available in demo mode.", "warn");
       return;
     }
     localStorage.removeItem("forge-demo-data-v1");
-    await reload();
+    activeUserRef.current = null;
+    const userId = await getSessionUserId();
+    if (userId) {
+      activeUserRef.current = null;
+      await bootSession(userId);
+    }
     toast("Demo data restored");
-  }, [reload, toast]);
+  }, [bootSession, toast]);
 
   return (
     <Ctx.Provider
@@ -691,6 +819,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setFollowUpDays,
         markFollowUpDone,
         setNutritionTargets,
+        sendMessage,
+        addNotification,
+        markNotificationRead,
+        markAllNotificationsRead,
+        updateCoachName,
         resetData,
       }}
     >

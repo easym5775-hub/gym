@@ -1,12 +1,10 @@
 /* ================================================================
-   FORGE — pure, derived business logic.
-   Everything here is *computed* from stored records — statuses,
-   remaining days, attendance and follow-ups are never stored.
-   Operates on plain arrays of the existing types; has no side effects.
+   FORGE — pure derived business logic. Everything here is computed
+   from stored records — never persisted as editable values.
    ================================================================ */
 
 import type { AppState, CheckIn, Client, Payment, Session, SubState, Subscription } from "./types";
-import { addDays, diffDays, round1, todayISO } from "./lib";
+import { addDays, diffDays, todayISO } from "./lib";
 
 /* ---------------- subscriptions ---------------- */
 
@@ -33,11 +31,11 @@ export function subscriptionState(sub: Subscription | null): SubWithState {
   return { sub, state, daysLeft };
 }
 
-/** "23 Days Remaining" / "Expires Today" / "Expired 5 Days Ago" */
 export function remainingLabel(daysLeft: number): string {
-  if (daysLeft < 0) return `Expired ${Math.abs(daysLeft)}d ago`;
+  if (daysLeft < 0) return `Expired ${Math.abs(daysLeft)} day${Math.abs(daysLeft) === 1 ? "" : "s"} ago`;
   if (daysLeft === 0) return "Expires today";
-  return `${daysLeft}d remaining`;
+  if (daysLeft === 1) return "1 day remaining";
+  return `${daysLeft} days remaining`;
 }
 
 export function subHistory(subs: Subscription[]): Subscription[] {
@@ -56,7 +54,6 @@ export function paidForSubscription(payments: Payment[], subscriptionId: string)
     .reduce((s, p) => s + p.amount, 0);
 }
 
-/** Current subscription price minus the paid amount linked to it. */
 export function outstandingAmount(sub: Subscription | null, payments: Payment[]): number {
   if (!sub) return 0;
   return Math.max(0, sub.price - paidForSubscription(payments, sub.id));
@@ -76,7 +73,7 @@ export function sortSessions(sessions: Session[]): Session[] {
   return [...sessions].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
 }
 
-/* ---------------- check-ins ---------------- */
+/* ---------------- check-ins & progress ---------------- */
 
 export function sortCheckIns(checkIns: CheckIn[]): CheckIn[] {
   return [...checkIns].sort((a, b) => b.date.localeCompare(a.date) || b.ts - a.ts);
@@ -96,7 +93,7 @@ export interface Progress {
 }
 
 export function progressOf(checkIns: CheckIn[]): Progress {
-  const asc = [...checkIns].sort((a, b) => a.date.localeCompare(a.date) || a.ts - b.ts);
+  const asc = [...checkIns].sort((a, b) => a.date.localeCompare(b.date) || a.ts - b.ts);
   const first = asc[0] ?? null;
   const last = asc[asc.length - 1] ?? null;
   const withWaist = asc.filter((c) => c.waist !== undefined);
@@ -105,22 +102,21 @@ export function progressOf(checkIns: CheckIn[]): Progress {
   return {
     startWeight: first ? first.weight : null,
     currentWeight: last ? last.weight : null,
-    weightChange: first && last && asc.length > 1 ? round1(last.weight - first.weight) : null,
+    weightChange: first && last && asc.length > 1 ? round(last.weight - first.weight) : null,
     startWaist: fw?.waist ?? null,
     currentWaist: lw?.waist ?? null,
-    waistChange: fw && lw && withWaist.length > 1 ? round1((lw.waist ?? 0) - (fw.waist ?? 0)) : null,
+    waistChange: fw && lw && withWaist.length > 1 ? round((lw.waist ?? 0) - (fw.waist ?? 0)) : null,
   };
 }
+
+const round = (n: number) => Math.round(n * 10) / 10;
 
 /* ---------------- follow-ups ---------------- */
 
 export interface FollowUpInfo {
   frequency: number;
-  /** The reference point: latest completed check-in or marked follow-up. */
   basis: string | null;
-  /** ISO date of the next follow-up (null when there is no basis yet). */
   next: string | null;
-  /** Days from today to `next` (negative = overdue). */
   daysToNext: number | null;
   label: string;
   overdue: boolean;
@@ -129,17 +125,17 @@ export interface FollowUpInfo {
 export function followUpInfo(client: Client, checkIns: CheckIn[]): FollowUpInfo {
   const frequency = client.followUpDays && client.followUpDays > 0 ? client.followUpDays : 7;
   const lastCi = latestCheckIn(checkIns);
-  const basis = [client.lastFollowUp, lastCi?.date].filter(Boolean).sort().pop() ?? null;
+  const basis = [client.lastFollowUp, lastCi?.date].filter((x): x is string => Boolean(x)).sort().pop() ?? null;
   if (!basis) {
     return { frequency, basis: null, next: null, daysToNext: null, label: "No check-in yet", overdue: false };
   }
   const next = addDays(basis, frequency);
   const daysToNext = diffDays(todayISO(), next);
   let label: string;
-  if (daysToNext < 0) label = `Overdue ${Math.abs(daysToNext)}d`;
+  if (daysToNext < 0) label = `Overdue ${Math.abs(daysToNext)} day${Math.abs(daysToNext) === 1 ? "" : "s"}`;
   else if (daysToNext === 0) label = "Due today";
   else if (daysToNext === 1) label = "Due tomorrow";
-  else label = `In ${daysToNext}d`;
+  else label = `In ${daysToNext} days`;
   return { frequency, basis, next, daysToNext, label, overdue: daysToNext < 0 };
 }
 
@@ -184,7 +180,7 @@ export function actionLists(state: AppState): ActionLists {
     if (info.state === "Expiring Soon") out.expiringSoon.push({ client, info });
     if (info.state === "Expired") out.expired.push({ client, info });
     const last = latestCheckIn(checkIns);
-    if (last && diffDays(last.date, today) > 7 && !out.staleCheckIns.some((c) => c.id === client.id)) {
+    if (last && diffDays(last.date, today) > 7 && !out.staleCheckIns.includes(client)) {
       out.staleCheckIns.push(client);
     }
   }

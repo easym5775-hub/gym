@@ -1,37 +1,42 @@
 /* ================================================================
-   FORGE — Client mode: today's plan & meals, daily check-in, progress.
-   A client only ever sees their own data (RLS in live mode, scoping in demo).
+   FORGE — client mode: Today, Daily check-in, My progress, Chat,
+   Subscription + the notification bell.
    ================================================================ */
 
-import { useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import {
   ArrowRight,
+  Bell,
   Camera,
   Check,
   ClipboardList,
-  Clock,
-  Droplets,
+  CreditCard,
   Dumbbell,
+  Droplets,
   Flame,
   Image as ImageIcon,
   LogOut,
+  MessageCircle,
   Play,
   Scale,
+  Send,
   UtensilsCrossed,
   X,
 } from "lucide-react";
-import { CAT_META, GOAL_META, MEAL_META, MEAL_TYPES, WEEK_DAYS } from "../types";
-import { dayNum, fileToDataUrl, relDay, round1, signed, todayISO } from "../lib";
-import { attendance, progressOf } from "../logic";
+import type { AppNotification } from "../types";
+import { CAT_META, GOAL_META, MEAL_META, MEAL_TYPES, NOTIFICATION_META, SUB_PAYMENT_META, SUB_STATE_META, WEEK_DAYS } from "../types";
+import { dayNum, fileToDataUrl, fmtDate, fmtMoney, relTime, round1, signed, todayISO } from "../lib";
+import { attendance, currentSubscription, progressOf, remainingLabel, subscriptionState } from "../logic";
 import { useApp } from "../store";
-import { Avatar, Badge, EmptyState, MoodPicker, SectionCard, Toggle, btnPrimary, chip } from "./ui";
+import { Avatar, Badge, EmptyState, MoodPicker, SectionCard, Toggle, btnPrimary, btnSecondary, btnSm, chip } from "./ui";
 import { WeightLine } from "./Chart";
 
-type Tab = "today" | "checkin" | "progress";
+type Tab = "today" | "checkin" | "progress" | "chat" | "subscription";
 
 export function ClientApp({ onLogout }: { onLogout: () => void }) {
-  const { state, me } = useApp();
+  const { state, me, markAllNotificationsRead } = useApp();
   const [tab, setTab] = useState<Tab>("today");
+  const [bellOpen, setBellOpen] = useState(false);
 
   const clientId = me?.userId ?? "";
   const client = state.clients.find((c) => c.id === clientId);
@@ -39,6 +44,11 @@ export function ClientApp({ onLogout }: { onLogout: () => void }) {
   const meals = useMemo(() => state.meals.filter((m) => m.clientId === clientId), [state.meals, clientId]);
   const checkIns = useMemo(() => state.checkIns.filter((c) => c.clientId === clientId), [state.checkIns, clientId]);
   const sessions = useMemo(() => state.sessions.filter((s) => s.clientId === clientId), [state.sessions, clientId]);
+  const notifications = useMemo(
+    () => state.notifications.filter((n) => n.clientId === clientId).sort((a, b) => b.createdAt - a.createdAt),
+    [state.notifications, clientId],
+  );
+  const unread = notifications.filter((n) => !n.read).length;
 
   if (!client) {
     return (
@@ -55,9 +65,19 @@ export function ClientApp({ onLogout }: { onLogout: () => void }) {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "today", label: "Today" },
-    { id: "checkin", label: "Daily check-in" },
-    { id: "progress", label: "My progress" },
+    { id: "checkin", label: "Check-in" },
+    { id: "progress", label: "Progress" },
+    { id: "chat", label: "Chat" },
+    { id: "subscription", label: "Subscription" },
   ];
+
+  const onNotifTap = (n: AppNotification) => {
+    if (n.kind === "message") setTab("chat");
+    else if (n.kind === "plan_updated") setTab("today");
+    else if (n.kind === "meal_updated") setTab("today");
+    else if (n.kind === "subscription") setTab("subscription");
+    setBellOpen(false);
+  };
 
   return (
     <div className="noise relative min-h-screen">
@@ -74,19 +94,74 @@ export function ClientApp({ onLogout }: { onLogout: () => void }) {
           </div>
           <nav className="ms-auto hidden gap-1.5 sm:flex">
             {tabs.map((t) => (
-              <button key={t.id} onClick={() => setTab(t.id)} className={`cursor-pointer rounded-full px-3.5 py-1.5 text-xs font-bold transition ${tab === t.id ? "bg-volt-400 text-night-950" : "bg-night-800 text-mist-400 hover:text-mist-100"}`}>
+              <button key={t.id} onClick={() => setTab(t.id)} className={`relative cursor-pointer rounded-full px-3.5 py-1.5 text-xs font-bold transition ${tab === t.id ? "bg-volt-400 text-night-950" : "bg-night-800 text-mist-400 hover:text-mist-100"}`}>
                 {t.label}
+                {t.id === "chat" && unread > 0 && tab !== "chat" && (
+                  <span className="absolute -end-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-danger-500 px-1 font-display text-[10px] font-bold leading-none text-white tnum">{unread}</span>
+                )}
               </button>
             ))}
           </nav>
+          {/* bell */}
+          <div className="relative ms-auto sm:ms-0">
+            <button
+              onClick={() => setBellOpen(!bellOpen)}
+              className="relative grid h-9 w-9 cursor-pointer place-items-center rounded-lg border border-night-600 text-mist-400 transition hover:border-night-500 hover:text-mist-100"
+              aria-label="Notifications"
+            >
+              <Bell className="h-4 w-4" />
+              {unread > 0 && (
+                <span className="absolute -end-1.5 -top-1.5 grid h-4.5 min-w-4.5 place-items-center rounded-full bg-danger-500 px-1 font-display text-[10px] font-bold leading-none text-white ring-2 ring-night-900 tnum">
+                  {unread}
+                </span>
+              )}
+            </button>
+            {bellOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setBellOpen(false)} />
+                <div className="animate-pop absolute end-0 top-11 z-50 w-80 overflow-hidden rounded-xl border border-night-600 bg-night-850 shadow-2xl">
+                  <div className="flex items-center justify-between border-b border-night-700 px-4 py-2.5">
+                    <p className="font-display text-sm font-semibold uppercase tracking-wide text-mist-100">Notifications</p>
+                    {unread > 0 && (
+                      <button className="cursor-pointer text-[11px] font-bold text-volt-300 transition hover:text-volt-200" onClick={() => markAllNotificationsRead(clientId)}>
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <p className="px-4 py-8 text-center text-xs text-mist-500">No notifications yet.</p>
+                    ) : (
+                      notifications.slice(0, 20).map((n) => (
+                        <button
+                          key={n.id}
+                          onClick={() => onNotifTap(n)}
+                          className={`flex w-full cursor-pointer items-start gap-2.5 border-b border-night-700/60 px-4 py-3 text-start transition last:border-0 hover:bg-night-800 ${n.read ? "opacity-55" : ""}`}
+                        >
+                          <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.read ? "bg-night-600" : NOTIFICATION_META[n.kind].dot} ${n.read ? "" : "tick-pulse"}`} />
+                          <span className="min-w-0 flex-1">
+                            <span className={`block text-xs font-bold ${n.read ? "text-mist-400" : "text-mist-100"}`}>{n.text}</span>
+                            <span className="mt-0.5 block text-[10px] font-semibold text-mist-500">{relTime(n.createdAt)}</span>
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
           <button onClick={onLogout} className="grid h-9 w-9 cursor-pointer place-items-center rounded-lg border border-night-600 text-mist-400 transition hover:border-night-500 hover:text-mist-100" aria-label="Sign out">
             <LogOut className="h-4 w-4" />
           </button>
         </div>
         <nav className="mx-auto flex w-full max-w-4xl gap-1.5 overflow-x-auto px-4 pb-3 sm:hidden">
           {tabs.map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)} className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-bold transition ${tab === t.id ? "bg-volt-400 text-night-950" : "bg-night-800 text-mist-400"}`}>
+            <button key={t.id} onClick={() => setTab(t.id)} className={`relative whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-bold transition ${tab === t.id ? "bg-volt-400 text-night-950" : "bg-night-800 text-mist-400"}`}>
               {t.label}
+              {t.id === "chat" && unread > 0 && tab !== "chat" && (
+                <span className="absolute -end-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-danger-500 px-1 font-display text-[10px] font-bold leading-none text-white tnum">{unread}</span>
+              )}
             </button>
           ))}
         </nav>
@@ -96,6 +171,8 @@ export function ClientApp({ onLogout }: { onLogout: () => void }) {
         {tab === "today" && <TodayTab plans={plans} meals={meals} exercises={state.exercises} onCheckIn={() => setTab("checkin")} sessionsToday={sessions.filter((s) => s.date === todayISO())} />}
         {tab === "checkin" && <CheckInTab clientId={clientId} onDone={() => setTab("progress")} alreadyToday={checkIns.some((c) => c.date === todayISO())} />}
         {tab === "progress" && <ProgressTab checkIns={checkIns} sessionsCount={attendance(sessions)} />}
+        {tab === "chat" && <ChatTab clientId={clientId} />}
+        {tab === "subscription" && <SubscriptionTab clientId={clientId} />}
       </main>
     </div>
   );
@@ -107,39 +184,42 @@ function TodayTab({
   plans,
   meals,
   exercises,
-  sessionsToday,
   onCheckIn,
+  sessionsToday,
 }: {
   plans: { id: string; day: number; exerciseId: string; sets: number; reps: number; rest: number; notes: string }[];
-  meals: { id: string; type: keyof typeof MEAL_META; description: string; calories: number; protein: number; carbs: number; fats: number }[];
-  exercises: { id: string; name: string; category: keyof typeof CAT_META; videoUrl: string }[];
-  sessionsToday: { id: string; time: string; type: string; status: string }[];
+  meals: { id: string; type: "Breakfast" | "Lunch" | "Dinner" | "Snack"; description: string; calories: number; protein: number; carbs: number; fats: number }[];
+  exercises: { id: string; name: string; category: "Chest" | "Back" | "Legs" | "Arms" | "Core" | "Cardio"; videoUrl: string }[];
   onCheckIn: () => void;
+  sessionsToday: { id: string; time: string; type: string; status: string }[];
 }) {
   const dn = dayNum();
   const todayPlan = plans.filter((p) => p.day === dn);
-  const exOf = (id: string) => exercises.find((e) => e.id === id);
   const kcal = meals.reduce((s, m) => s + m.calories, 0);
+  const exOf = (id: string) => exercises.find((e) => e.id === id);
 
   return (
     <div className="grid gap-4">
-      <div className="rise flex flex-wrap items-center gap-4 rounded-xl border border-night-700 bg-night-850 p-5">
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-mist-500">Your program</p>
-          <h1 className="mt-1 font-display text-4xl font-bold uppercase leading-none text-mist-100 sm:text-5xl">
-            Day {dn} <span className="text-volt-400">· {WEEK_DAYS[dn - 1]}</span>
-          </h1>
-          <p className="mt-2 text-sm text-mist-400">
-            {todayPlan.length > 0 ? `${todayPlan.length} exercise${todayPlan.length > 1 ? "s" : ""} today` : "Recovery day"} · {kcal > 0 ? `${kcal.toLocaleString("en-US")} kcal planned` : "no meals assigned"}
-          </p>
+      <div className="rise relative overflow-hidden rounded-xl border border-night-700 bg-night-850 p-5 sm:p-6">
+        <div className="pointer-events-none absolute inset-0 opacity-[0.35]" style={{ backgroundImage: "repeating-linear-gradient(-45deg, transparent 0 14px, rgba(205,241,75,0.04) 14px 15px)" }} />
+        <div className="relative flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-mist-500">Your program</p>
+            <h1 className="mt-1 font-display text-[44px] font-bold uppercase leading-[0.92] text-mist-100 sm:text-[54px]">
+              Day {dn} <span className="text-volt-400">· {WEEK_DAYS[dn - 1]}</span>
+            </h1>
+            <p className="mt-2 text-sm text-mist-400">
+              {todayPlan.length > 0 ? `${todayPlan.length} exercise${todayPlan.length > 1 ? "s" : ""} today` : "Recovery day"} · {kcal > 0 ? `${kcal.toLocaleString("en-US")} kcal planned` : "no meals assigned"}
+            </p>
+          </div>
+          <button className={`${btnPrimary} h-12`} onClick={onCheckIn}>
+            <Camera className="h-5 w-5" /> Submit daily check-in
+          </button>
         </div>
-        <button className={`${btnPrimary} h-12`} onClick={onCheckIn}>
-          <Camera className="h-5 w-5" /> Submit daily check-in
-        </button>
       </div>
 
       {sessionsToday.length > 0 && (
-        <SectionCard title="Today's sessions" icon={<Clock className="h-4.5 w-4.5" />} bodyCls="p-3">
+        <SectionCard title="Today's sessions" icon={<ClipboardList className="h-4.5 w-4.5" />} bodyCls="p-3">
           <ul className="grid gap-2">
             {sessionsToday.map((s) => (
               <li key={s.id} className="flex items-center gap-3 rounded-lg border border-night-700 bg-night-800 p-3">
@@ -152,7 +232,7 @@ function TodayTab({
         </SectionCard>
       )}
 
-      <SectionCard title="Today's workout" icon={<ClipboardList className="h-4.5 w-4.5" />} delay={80} bodyCls="p-3">
+      <SectionCard title="Today's workout" icon={<Dumbbell className="h-4.5 w-4.5" />} delay={80} bodyCls="p-3">
         {todayPlan.length === 0 ? (
           <EmptyState icon={<Dumbbell className="h-6 w-6" />} title="Rest day" sub="No session programmed today. Sleep well, eat well, come back stronger tomorrow." />
         ) : (
@@ -173,7 +253,7 @@ function TodayTab({
                       )}
                     </div>
                     <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs font-semibold text-mist-400">
-                      <span className="font-display text-base text-mist-200">
+                      <span className="font-display text-base text-mist-200 tnum">
                         {item.sets} × {item.reps} <span className="text-mist-500">reps</span>
                       </span>
                       <span>{item.rest > 0 ? `${item.rest}s rest` : "no rest"}</span>
@@ -281,7 +361,7 @@ function CheckInTab({ clientId, onDone, alreadyToday }: { clientId: string; onDo
   return (
     <div className="grid gap-4">
       <div className="rise rounded-xl border border-night-700 bg-night-850 p-5">
-        <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-mist-500">{relDay(todayISO())}</p>
+        <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-mist-500">{todayISO()}</p>
         <h1 className="mt-1 font-display text-4xl font-bold uppercase leading-none text-mist-100 sm:text-5xl">
           Daily <span className="text-volt-400">check-in</span>
         </h1>
@@ -345,14 +425,14 @@ function CheckInTab({ clientId, onDone, alreadyToday }: { clientId: string; onDo
               <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-night-500 bg-night-700 px-3 text-xs font-bold text-mist-100 transition hover:bg-night-600">
                 <Camera className="h-4 w-4" />
                 {photo ? "Replace photo" : "Upload photo"}
-                <input type="file" accept="image/*" className="hidden" onChange={pickPhoto} />
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => void pickPhoto(e)} />
               </label>
             </div>
             {photoErr && <p className="mt-1 text-xs font-semibold text-danger-400">{photoErr}</p>}
           </div>
           <div>
             <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-mist-400">Notes for your coach</label>
-            <textarea className="w-full rounded-lg border border-night-600 bg-night-800 px-3 py-2 text-sm text-mist-100 outline-none transition focus:border-volt-400 min-h-20 resize-y" placeholder="Energy, sleep, soreness, PRs…" value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <textarea className="w-full min-h-20 resize-y rounded-lg border border-night-600 bg-night-800 px-3 py-2 text-sm text-mist-100 outline-none transition focus:border-volt-400" placeholder="Energy, sleep, soreness, PRs…" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
         </div>
         {error && <p className="mt-3 text-xs font-bold text-danger-400">{error}</p>}
@@ -413,7 +493,7 @@ function ProgressTab({ checkIns, sessionsCount }: { checkIns: Parameters<typeof 
   );
 }
 
-function MiniKpi({ icon, label, value, unit, tone }: { icon: React.ReactNode; label: string; value: string; unit: string; tone?: string }) {
+function MiniKpi({ icon, label, value, unit, tone }: { icon: ReactNode; label: string; value: string; unit: string; tone?: string }) {
   return (
     <div className="rounded-xl border border-night-700 bg-night-850 p-4">
       <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-mist-500">
@@ -426,3 +506,179 @@ function MiniKpi({ icon, label, value, unit, tone }: { icon: React.ReactNode; la
     </div>
   );
 }
+
+/* ---------------- chat ---------------- */
+
+function ChatTab({ clientId }: { clientId: string }) {
+  const { state, sendMessage, markNotificationRead } = useApp();
+  const [draft, setDraft] = useState("");
+  const endRef = useRef<HTMLDivElement>(null);
+
+  const thread = useMemo(
+    () => state.messages.filter((m) => m.clientId === clientId).sort((a, b) => a.createdAt - b.createdAt),
+    [state.messages, clientId],
+  );
+
+  // Mark unread message-notifications as read while the thread is open.
+  useEffect(() => {
+    state.notifications
+      .filter((n) => n.clientId === clientId && n.kind === "message" && !n.read)
+      .forEach((n) => markNotificationRead(n.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, thread.length]);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [thread.length]);
+
+  const submit = () => {
+    if (!draft.trim()) return;
+    sendMessage(clientId, draft);
+    setDraft("");
+  };
+
+  return (
+    <div className="rise flex h-[calc(100vh-230px)] min-h-96 flex-col overflow-hidden rounded-xl border border-night-700 bg-night-850">
+      <header className="flex items-center gap-2.5 border-b border-night-700 px-5 py-3.5">
+        <MessageCircle className="h-4.5 w-4.5 text-volt-400" />
+        <h2 className="font-display text-lg font-semibold uppercase tracking-wide text-mist-100">Chat with your coach</h2>
+        <span className="ms-auto text-[11px] font-semibold text-mist-500 tnum">{thread.length} message{thread.length === 1 ? "" : "s"}</span>
+      </header>
+      <div className="flex-1 space-y-2.5 overflow-y-auto p-4">
+        {thread.length === 0 && (
+          <p className="grid h-full place-items-center text-center text-xs text-mist-500">
+            No messages yet.<br />Ask your coach anything — it goes straight to their dashboard.
+          </p>
+        )}
+        {thread.map((m) => {
+          const mine = m.senderRole === "client";
+          return (
+            <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+              <div className={`max-w-[85%] rounded-xl px-3.5 py-2 ${mine ? "rounded-ee-sm bg-volt-400 text-night-950" : "rounded-es-sm border border-night-600 bg-night-800 text-mist-100"}`}>
+                {!mine && <p className="text-[10px] font-bold uppercase tracking-wider text-volt-300">Coach</p>}
+                <p className="text-sm font-semibold leading-5">{m.text}</p>
+                <p className={`mt-0.5 text-[10px] font-bold ${mine ? "text-night-950/60" : "text-mist-500"}`}>{relTime(m.createdAt)}</p>
+              </div>
+            </div>
+          );
+        })}
+        <div ref={endRef} />
+      </div>
+      <div className="flex gap-2 border-t border-night-700 p-3">
+        <input
+          className="h-11 min-w-0 flex-1 rounded-lg border border-night-600 bg-night-800 px-3.5 text-sm text-mist-100 outline-none transition focus:border-volt-400"
+          placeholder="Type a message…"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+        />
+        <button onClick={submit} disabled={!draft.trim()} className={`${btnPrimary} h-11 shrink-0 px-4`} aria-label="Send">
+          <Send className="h-4 w-4 rtl:-scale-x-100" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- subscription (read-only) ---------------- */
+
+function SubscriptionTab({ clientId }: { clientId: string }) {
+  const { state } = useApp();
+  const subs = useMemo(() => state.subscriptions.filter((s) => s.clientId === clientId), [state.subscriptions, clientId]);
+  const payments = useMemo(
+    () => state.payments.filter((p) => p.clientId === clientId && p.status === "Paid").sort((a, b) => b.date.localeCompare(a.date)),
+    [state.payments, clientId],
+  );
+  const info = subscriptionState(currentSubscription(subs));
+  const sub = info.sub;
+  const meta = SUB_STATE_META[info.state];
+
+  const pctElapsed = useMemo(() => {
+    if (!sub) return 0;
+    const start = new Date(sub.startDate + "T12:00:00").getTime();
+    const end = new Date(sub.endDate + "T12:00:00").getTime();
+    const now = Date.now();
+    if (end <= start) return 100;
+    return Math.min(100, Math.max(0, ((now - start) / (end - start)) * 100));
+  }, [sub]);
+
+  return (
+    <div className="grid gap-4">
+      <SectionCard title="My subscription" icon={<CreditCard className="h-4.5 w-4.5" />} bodyCls="p-5">
+        {!sub ? (
+          <EmptyState icon={<CreditCard className="h-6 w-6" />} title="No active subscription" sub="Your coach hasn't assigned a plan yet. Reach out in the chat." />
+        ) : (
+          <div className="grid gap-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-mist-500">Current plan</p>
+                <p className="mt-1 font-display text-3xl font-bold uppercase leading-none text-mist-100">{sub.planName}</p>
+              </div>
+              <Badge className={meta.chip}>
+                <span className={`h-1.5 w-1.5 rounded-full ${meta.dot} ${info.state === "Expiring Soon" ? "tick-pulse" : ""}`} />
+                {info.state}
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <ReadOnly k="Price" v={`${fmtMoney(sub.price)} EGP`} />
+              <ReadOnly k="Starts" v={fmtDate(sub.startDate)} />
+              <ReadOnly k="Ends" v={fmtDate(sub.endDate)} />
+              <div className="rounded-lg border border-night-700 bg-night-800 p-3">
+                <p className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-mist-500">Payment</p>
+                <Badge className={`${SUB_PAYMENT_META[sub.paymentStatus].chip} mt-1.5`}>{sub.paymentStatus}</Badge>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-baseline justify-between">
+                <p className={`font-display text-2xl font-bold ${info.state === "Expired" ? "text-danger-300" : info.state === "Expiring Soon" ? "text-warn-300" : "text-moss-300"}`}>
+                  {remainingLabel(info.daysLeft)}
+                </p>
+                <p className="text-[11px] font-semibold text-mist-500 tnum">{Math.round(pctElapsed)}% of period elapsed</p>
+              </div>
+              <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-night-700">
+                <div className={`grow-x h-full rounded-full ${meta.bar}`} style={{ width: `${pctElapsed}%` }} />
+              </div>
+            </div>
+
+            <p className="rounded-lg border border-night-700 bg-night-800/60 px-3.5 py-2.5 text-[11px] leading-5 text-mist-400">
+              To renew or change your plan, message your coach — renewals are handled on their side.
+            </p>
+          </div>
+        )}
+      </SectionCard>
+
+      <SectionCard title="Payment history" icon={<CreditCard className="h-4.5 w-4.5" />} delay={100} bodyCls="p-3">
+        {payments.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-night-600 px-4 py-6 text-center text-xs text-mist-500">No payments recorded yet.</p>
+        ) : (
+          <ul className="grid gap-1.5">
+            {payments.map((p) => (
+              <li key={p.id} className="flex items-center gap-3 rounded-lg border border-night-700 bg-night-800 px-3.5 py-2.5">
+                <span className="w-24 shrink-0 text-xs font-bold text-mist-300">{fmtDate(p.date)}</span>
+                <span className="font-display text-lg font-bold text-mist-100 tnum">
+                  {fmtMoney(p.amount)} <span className="text-xs font-semibold text-mist-500">EGP</span>
+                </span>
+                <span className="ms-auto text-xs font-semibold text-mist-400">{p.method}</span>
+                <Badge className="border-moss-400/25 bg-moss-400/10 text-moss-300">Paid</Badge>
+              </li>
+            ))}
+          </ul>
+        )}
+      </SectionCard>
+    </div>
+  );
+}
+
+function ReadOnly({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="rounded-lg border border-night-700 bg-night-800 p-3">
+      <p className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-mist-500">{k}</p>
+      <p className="mt-1 font-display text-lg font-bold text-mist-100 tnum">{v}</p>
+    </div>
+  );
+}
+
+void btnSecondary;
+void btnSm;

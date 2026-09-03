@@ -1,112 +1,75 @@
 /* ================================================================
    FORGE — backend abstraction.
 
-   The UI and the store never talk to Supabase directly; they talk to a
-   `Backend`. Two implementations exist:
+   The UI and the store never talk to Supabase directly; they talk to
+   a `Backend`. Two implementations exist:
 
-     • SupabaseBackend — live Postgres + Auth + Edge Functions (used when
-       VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are set).
-     • DemoBackend     — a clearly-labelled local store (localStorage) so
-       the app is fully usable in this environment without credentials.
+     • SupabaseBackend — live Postgres + Auth + Edge Functions (used
+       when VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are set).
+     • DemoBackend     — a clearly-labelled local store (localStorage)
+       so the app is fully usable with zero credentials.
 
-   Swapping backends never touches the UI. Row mapping between Postgres
-   snake_case and the app's camelCase types lives here.
+   Row mapping between Postgres snake_case and the app's camelCase
+   types lives here.
    ================================================================ */
 
+import { createClient } from "@supabase/supabase-js";
 import type {
+  AppNotification,
   AppState,
   CheckIn,
   Client,
   Exercise,
-  Goal,
-  ClientStatus,
-  ExerciseCategory,
   Meal,
-  MealType,
+  Message,
+  NewClientInput,
   Payment,
-  PaymentMethod,
-  PaymentStatus,
   PlanItem,
   Session,
-  SessionStatus,
   Subscription,
-  SubscriptionPaymentStatus,
 } from "../types";
 import { todayISO, uuid } from "../lib";
-import { isSupabaseConfigured, supabase } from "./supabase";
+import { rememberAwareStorage, setRemember } from "./remember";
 
-/* ---------------- role / session model ---------------- */
+/* ---------------- config ---------------- */
+
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL ?? "").trim();
+const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY ?? "").trim();
+
+export const isSupabaseConfigured = SUPABASE_URL.length > 0 && SUPABASE_ANON_KEY.length > 0;
+export const isDemoMode = !isSupabaseConfigured;
+
+const supabase = createClient(
+  SUPABASE_URL || "https://not-configured.supabase.co",
+  SUPABASE_ANON_KEY || "public-anon-key-not-set",
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      // Honour "Remember me": localStorage vs sessionStorage.
+      storage: rememberAwareStorage,
+    },
+  },
+);
+
+/* ---------------- role model ---------------- */
 
 export interface RoleInfo {
   role: "coach" | "client";
-  /** The Supabase auth user id (shared id space for coaches & clients). */
   userId: string;
-  /** The owning coach's id — scopes every query. */
   coachId: string;
   name: string;
   email: string;
-  /** Present only for the client role. */
   client?: Client;
 }
 
-export interface NewClientInput {
-  username: string;
-  password: string;
-  name: string;
-  email?: string;
-  phone?: string;
-  gender?: "Male" | "Female" | "Other";
-  age?: number;
-  goal: Goal;
-  status: ClientStatus;
-  startDate: string;
-  notes?: string;
-  photo?: string;
-}
+/* ---------------- row mappers (snake_case ⇄ camelCase) ---------------- */
 
-export interface Backend {
-  readonly kind: "supabase" | "demo";
-
-  /* auth */
-  getSessionUserId(): Promise<string | null>;
-  onAuthChange(cb: (userId: string | null) => void): () => void;
-  coachSignUp(email: string, password: string, name: string): Promise<void>;
-  coachSignIn(email: string, password: string): Promise<void>;
-  clientSignIn(username: string, password: string): Promise<void>;
-  signOut(): Promise<void>;
-  resolveRole(userId: string): Promise<RoleInfo | null>;
-
-  /* data */
-  load(): Promise<AppState>;
-  insert(table: string, row: Record<string, unknown>): Promise<void>;
-  update(table: string, id: string, row: Record<string, unknown>): Promise<void>;
-  remove(table: string, id: string): Promise<void>;
-
-  /* edge functions (client account lifecycle) */
-  createClientAccount(input: NewClientInput): Promise<Client>;
-  resetClientPassword(clientId: string, newPassword: string): Promise<void>;
-  deleteClientAccount(clientId: string): Promise<void>;
-}
-
-/* ================================================================
-   Row mappers — Postgres snake_case  ⇄  app camelCase
-   ================================================================ */
-
-type Row = Record<string, any>;
-
-const clean = (row: Row): Row => {
-  const out: Row = { ...row };
-  delete out.id;
-  delete out.coach_id;
-  delete out.created_at;
-  delete out.updated_at;
-  // login_email is the synthetic auth email — it is ONLY ever set by the
-  // create-client-account edge function. The frontend must never write it.
-  delete out.login_email;
-  return out;
-};
+type Row = Record<string, unknown>;
 
 export const clientToRow = (c: Client): Row => ({
+  username: c.username,
   name: c.name,
   email: c.email,
   phone: c.phone,
@@ -119,52 +82,57 @@ export const clientToRow = (c: Client): Row => ({
   photo: c.photo ?? null,
   follow_up_days: c.followUpDays ?? null,
   last_follow_up: c.lastFollowUp ?? null,
-  coach_notes: c.coachNotes ?? [],
-  nutrition_targets: c.nutritionTargets ?? null,
+  coach_notes: JSON.stringify(c.coachNotes ?? []),
+  nutrition_targets: c.nutritionTargets ? JSON.stringify(c.nutritionTargets) : null,
 });
+
+const jsonField = <T,>(v: unknown, fallback: T): T => {
+  if (v === null || v === undefined || v === "") return fallback;
+  if (typeof v === "object") return v as T;
+  try {
+    return JSON.parse(String(v)) as T;
+  } catch {
+    return fallback;
+  }
+};
 
 export const rowToClient = (r: Row): Client => ({
   id: String(r.id),
-  coachId: String(r.coach_id),
+  coachId: String(r.coach_id ?? ""),
   username: String(r.username ?? ""),
   name: String(r.name ?? ""),
   email: String(r.email ?? ""),
   phone: String(r.phone ?? ""),
-  gender: r.gender ?? undefined,
-  age: r.age == null ? undefined : Number(r.age),
-  goal: (r.goal as Goal) ?? "General fitness",
+  gender: (r.gender as Client["gender"]) ?? undefined,
+  age: r.age === null || r.age === undefined || r.age === "" ? undefined : Number(r.age),
+  goal: (r.goal as Client["goal"]) ?? "General fitness",
   startDate: String(r.start_date ?? todayISO()),
-  status: (r.status as ClientStatus) ?? "Active",
+  status: (r.status as Client["status"]) ?? "Active",
   notes: String(r.notes ?? ""),
-  photo: r.photo ?? undefined,
-  followUpDays: r.follow_up_days == null ? undefined : Number(r.follow_up_days),
-  lastFollowUp: r.last_follow_up ?? undefined,
-  coachNotes: Array.isArray(r.coach_notes) ? r.coach_notes : [],
-  nutritionTargets: r.nutrition_targets ?? undefined,
+  photo: r.photo ? String(r.photo) : undefined,
+  followUpDays: r.follow_up_days === null || r.follow_up_days === undefined || r.follow_up_days === "" ? undefined : Number(r.follow_up_days),
+  lastFollowUp: r.last_follow_up ? String(r.last_follow_up) : undefined,
+  coachNotes: jsonField<Client["coachNotes"]>(r.coach_notes, []),
+  nutritionTargets: r.nutrition_targets ? jsonField<Client["nutritionTargets"]>(r.nutrition_targets, undefined as unknown as Client["nutritionTargets"]) : undefined,
 });
 
 export const exerciseToRow = (e: Exercise): Row => ({
-  id: e.id,
-  coach_id: e.coachId,
   name: e.name,
   category: e.category,
   description: e.description,
   video_url: e.videoUrl,
-  image: e.image ?? null,
 });
+
 export const rowToExercise = (r: Row): Exercise => ({
   id: String(r.id),
-  coachId: String(r.coach_id),
+  coachId: String(r.coach_id ?? ""),
   name: String(r.name ?? ""),
-  category: (r.category as ExerciseCategory) ?? "Core",
+  category: (r.category as Exercise["category"]) ?? "Chest",
   description: String(r.description ?? ""),
   videoUrl: String(r.video_url ?? ""),
-  image: r.image ?? undefined,
 });
 
 export const planToRow = (p: PlanItem): Row => ({
-  id: p.id,
-  coach_id: p.coachId,
   client_id: p.clientId,
   day: p.day,
   exercise_id: p.exerciseId,
@@ -173,21 +141,20 @@ export const planToRow = (p: PlanItem): Row => ({
   rest: p.rest,
   notes: p.notes,
 });
+
 export const rowToPlan = (r: Row): PlanItem => ({
   id: String(r.id),
-  coachId: String(r.coach_id),
-  clientId: String(r.client_id),
+  coachId: String(r.coach_id ?? ""),
+  clientId: String(r.client_id ?? ""),
   day: Number(r.day) || 1,
-  exerciseId: String(r.exercise_id),
-  sets: Number(r.sets) || 0,
-  reps: Number(r.reps) || 0,
+  exerciseId: String(r.exercise_id ?? ""),
+  sets: Number(r.sets) || 1,
+  reps: Number(r.reps) || 1,
   rest: Number(r.rest) || 0,
   notes: String(r.notes ?? ""),
 });
 
 export const checkInToRow = (c: CheckIn): Row => ({
-  id: c.id,
-  coach_id: c.coachId,
   client_id: c.clientId,
   date: c.date,
   ts: c.ts,
@@ -199,24 +166,23 @@ export const checkInToRow = (c: CheckIn): Row => ({
   notes: c.notes ?? null,
   photo: c.photo ?? null,
 });
+
 export const rowToCheckIn = (r: Row): CheckIn => ({
   id: String(r.id),
-  coachId: String(r.coach_id),
-  clientId: String(r.client_id),
-  date: String(r.date),
+  coachId: String(r.coach_id ?? ""),
+  clientId: String(r.client_id ?? ""),
+  date: String(r.date ?? todayISO()),
   ts: Number(r.ts) || 0,
   weight: Number(r.weight) || 0,
-  waist: r.waist == null ? undefined : Number(r.waist),
+  waist: r.waist === null || r.waist === undefined || r.waist === "" ? undefined : Number(r.waist),
   mood: Number(r.mood) || 3,
   water: Number(r.water) || 0,
   workoutDone: Boolean(r.workout_done),
-  notes: r.notes ?? undefined,
-  photo: r.photo ?? undefined,
+  notes: r.notes ? String(r.notes) : undefined,
+  photo: r.photo ? String(r.photo) : undefined,
 });
 
 export const mealToRow = (m: Meal): Row => ({
-  id: m.id,
-  coach_id: m.coachId,
   client_id: m.clientId,
   type: m.type,
   description: m.description,
@@ -225,11 +191,12 @@ export const mealToRow = (m: Meal): Row => ({
   carbs: m.carbs,
   fats: m.fats,
 });
+
 export const rowToMeal = (r: Row): Meal => ({
   id: String(r.id),
-  coachId: String(r.coach_id),
-  clientId: String(r.client_id),
-  type: (r.type as MealType) ?? "Snack",
+  coachId: String(r.coach_id ?? ""),
+  clientId: String(r.client_id ?? ""),
+  type: (r.type as Meal["type"]) ?? "Snack",
   description: String(r.description ?? ""),
   calories: Number(r.calories) || 0,
   protein: Number(r.protein) || 0,
@@ -238,31 +205,28 @@ export const rowToMeal = (r: Row): Meal => ({
 });
 
 export const subscriptionToRow = (s: Subscription): Row => ({
-  id: s.id,
-  coach_id: s.coachId,
   client_id: s.clientId,
   plan_name: s.planName,
   start_date: s.startDate,
   end_date: s.endDate,
   price: s.price,
   payment_status: s.paymentStatus,
-  created_at: new Date(s.createdAt).toISOString(),
+  created_at: s.createdAt,
 });
+
 export const rowToSubscription = (r: Row): Subscription => ({
   id: String(r.id),
-  coachId: String(r.coach_id),
-  clientId: String(r.client_id),
-  planName: String(r.plan_name ?? "Monthly"),
+  coachId: String(r.coach_id ?? ""),
+  clientId: String(r.client_id ?? ""),
+  planName: String(r.plan_name ?? ""),
   startDate: String(r.start_date ?? todayISO()),
   endDate: String(r.end_date ?? todayISO()),
   price: Number(r.price) || 0,
-  paymentStatus: (r.payment_status as SubscriptionPaymentStatus) ?? "Pending",
-  createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
+  paymentStatus: (r.payment_status as Subscription["paymentStatus"]) ?? "Pending",
+  createdAt: Number(r.created_at) || 0,
 });
 
 export const paymentToRow = (p: Payment): Row => ({
-  id: p.id,
-  coach_id: p.coachId,
   client_id: p.clientId,
   subscription_id: p.subscriptionId ?? null,
   amount: p.amount,
@@ -271,21 +235,20 @@ export const paymentToRow = (p: Payment): Row => ({
   status: p.status,
   notes: p.notes,
 });
+
 export const rowToPayment = (r: Row): Payment => ({
   id: String(r.id),
-  coachId: String(r.coach_id),
-  clientId: String(r.client_id),
-  subscriptionId: r.subscription_id ?? undefined,
+  coachId: String(r.coach_id ?? ""),
+  clientId: String(r.client_id ?? ""),
+  subscriptionId: r.subscription_id ? String(r.subscription_id) : undefined,
   amount: Number(r.amount) || 0,
   date: String(r.date ?? todayISO()),
-  method: (r.method as PaymentMethod) ?? "Cash",
-  status: (r.status as PaymentStatus) ?? "Paid",
+  method: (r.method as Payment["method"]) ?? "Cash",
+  status: (r.status as Payment["status"]) ?? "Paid",
   notes: String(r.notes ?? ""),
 });
 
 export const sessionToRow = (s: Session): Row => ({
-  id: s.id,
-  coach_id: s.coachId,
   client_id: s.clientId,
   date: s.date,
   time: s.time,
@@ -293,22 +256,138 @@ export const sessionToRow = (s: Session): Row => ({
   status: s.status,
   notes: s.notes,
 });
+
 export const rowToSession = (r: Row): Session => ({
   id: String(r.id),
-  coachId: String(r.coach_id),
-  clientId: String(r.client_id),
+  coachId: String(r.coach_id ?? ""),
+  clientId: String(r.client_id ?? ""),
   date: String(r.date ?? todayISO()),
   time: String(r.time ?? "18:00"),
   type: String(r.type ?? "Training"),
-  status: (r.status as SessionStatus) ?? "Scheduled",
+  status: (r.status as Session["status"]) ?? "Scheduled",
   notes: String(r.notes ?? ""),
 });
 
-/* ================================================================
-   SupabaseBackend
-   ================================================================ */
+export const messageToRow = (m: Message): Row => ({
+  client_id: m.clientId,
+  sender_role: m.senderRole,
+  text: m.text,
+  ts: m.createdAt,
+});
 
-const SUPABASE_TABLES = [
+export const rowToMessage = (r: Row): Message => ({
+  id: String(r.id),
+  coachId: String(r.coach_id ?? ""),
+  clientId: String(r.client_id ?? ""),
+  senderRole: (r.sender_role as Message["senderRole"]) ?? "client",
+  text: String(r.text ?? ""),
+  createdAt: Number(r.ts) || 0,
+});
+
+export const notificationToRow = (n: AppNotification): Row => ({
+  client_id: n.clientId,
+  kind: n.kind,
+  text: n.text,
+  ts: n.createdAt,
+  read: n.read,
+});
+
+export const rowToNotification = (r: Row): AppNotification => ({
+  id: String(r.id),
+  coachId: String(r.coach_id ?? ""),
+  clientId: String(r.client_id ?? ""),
+  kind: (r.kind as AppNotification["kind"]) ?? "reminder",
+  text: String(r.text ?? ""),
+  createdAt: Number(r.ts) || 0,
+  read: Boolean(r.read),
+});
+
+/** Table name → entity converter (used by the demo merge path). */
+export function rowFromTable(table: string, row: Row): unknown {
+  switch (table) {
+    case "clients":
+      return rowToClient(row);
+    case "exercises":
+      return rowToExercise(row);
+    case "plan_items":
+      return rowToPlan(row);
+    case "check_ins":
+      return rowToCheckIn(row);
+    case "meals":
+      return rowToMeal(row);
+    case "subscriptions":
+      return rowToSubscription(row);
+    case "payments":
+      return rowToPayment(row);
+    case "sessions":
+      return rowToSession(row);
+    case "messages":
+      return rowToMessage(row);
+    case "notifications":
+      return rowToNotification(row);
+    default:
+      return row;
+  }
+}
+
+/** Convert a typed entity back to a full snake_case row (for demo merges). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function entityToRow(table: string, entity: any): Row {
+  switch (table) {
+    case "clients":
+      return { id: entity.id, coach_id: entity.coachId, ...clientToRow(entity) };
+    case "exercises":
+      return exerciseToRow(entity);
+    case "plan_items":
+      return planToRow(entity);
+    case "check_ins":
+      return checkInToRow(entity);
+    case "meals":
+      return mealToRow(entity);
+    case "subscriptions":
+      return subscriptionToRow(entity);
+    case "payments":
+      return paymentToRow(entity);
+    case "sessions":
+      return sessionToRow(entity);
+    case "messages":
+      return messageToRow(entity);
+    case "notifications":
+      return notificationToRow(entity);
+    default:
+      return entity;
+  }
+}
+
+/** Strip columns the frontend must never write on update. */
+function clean(row: Row): Row {
+  const out: Row = { ...row };
+  for (const k of ["id", "coach_id", "created_at", "updated_at", "login_email"]) delete out[k];
+  return out;
+}
+
+/* ---------------- Backend interface ---------------- */
+
+export interface Backend {
+  readonly kind: "demo" | "supabase";
+  getSessionUserId(): Promise<string | null>;
+  onAuthChange(cb: (userId: string | null) => void): () => void;
+  coachSignUp(email: string, password: string, name: string, remember: boolean): Promise<void>;
+  coachSignIn(email: string, password: string, remember: boolean): Promise<void>;
+  clientSignIn(username: string, password: string, remember: boolean): Promise<void>;
+  signOut(): Promise<void>;
+  resolveRole(userId: string): Promise<RoleInfo | null>;
+  load(): Promise<AppState>;
+  insert(table: string, row: Row): Promise<void>;
+  update(table: string, id: string, row: Row): Promise<void>;
+  remove(table: string, id: string): Promise<void>;
+  createClientAccount(input: NewClientInput): Promise<Client>;
+  resetClientPassword(clientId: string, newPassword: string): Promise<void>;
+  deleteClientAccount(clientId: string): Promise<void>;
+  updateCoachName(name: string): Promise<void>;
+}
+
+const TABLES = [
   "clients",
   "exercises",
   "plan_items",
@@ -317,7 +396,13 @@ const SUPABASE_TABLES = [
   "subscriptions",
   "payments",
   "sessions",
+  "messages",
+  "notifications",
 ] as const;
+
+/* ================================================================
+   SupabaseBackend — live Postgres + Auth (RLS scopes everything).
+   ================================================================ */
 
 class SupabaseBackend implements Backend {
   readonly kind = "supabase" as const;
@@ -334,33 +419,31 @@ class SupabaseBackend implements Backend {
     return () => data.subscription.unsubscribe();
   }
 
-  async coachSignUp(email: string, password: string, name: string): Promise<void> {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { role: "coach", name } },
-    });
-    if (error) throw new Error(friendly(error.message));
-    if (data.session?.user) {
-      // Ensure a coaches row exists for this auth user.
-      await supabase.from("coaches").upsert({ id: data.session.user.id, name, email });
+  async coachSignUp(email: string, password: string, name: string, remember: boolean): Promise<void> {
+    setRemember(remember);
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) throw new Error(error.message);
+    const userId = data.user?.id;
+    if (userId) {
+      const { error: insErr } = await supabase.from("coaches").upsert({ id: userId, name, email });
+      if (insErr) throw new Error(insErr.message);
     }
   }
 
-  async coachSignIn(email: string, password: string): Promise<void> {
+  async coachSignIn(email: string, password: string, remember: boolean): Promise<void> {
+    setRemember(remember);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(friendly(error.message));
+    if (error) throw new Error(error.message);
   }
 
-  async clientSignIn(username: string, password: string): Promise<void> {
-    // Username → synthetic email bridge (RPC), then standard password sign-in.
-    const { data: email, error } = await supabase.rpc("client_login_email", {
-      p_username: username.trim().toLowerCase(),
-    });
-    if (error) throw new Error("Invalid username or password.");
+  async clientSignIn(username: string, password: string, remember: boolean): Promise<void> {
+    setRemember(remember);
+    const { data, error } = await supabase.rpc("client_login_email", { p_username: username });
+    if (error) throw new Error(error.message);
+    const email = typeof data === "string" ? data : "";
     if (!email) throw new Error("Invalid username or password.");
-    const res = await supabase.auth.signInWithPassword({ email: String(email), password });
-    if (res.error) throw new Error("Invalid username or password.");
+    const { error: signErr } = await supabase.auth.signInWithPassword({ email, password });
+    if (signErr) throw new Error("Invalid username or password.");
   }
 
   async signOut(): Promise<void> {
@@ -368,161 +451,146 @@ class SupabaseBackend implements Backend {
   }
 
   async resolveRole(userId: string): Promise<RoleInfo | null> {
-    const coach = await supabase.from("coaches").select("id,name,email").eq("id", userId).maybeSingle();
-    if (coach.data) {
-      return {
-        role: "coach",
-        userId,
-        coachId: userId,
-        name: coach.data.name ?? "Coach",
-        email: coach.data.email ?? "",
-      };
+    const { data: coach } = await supabase.from("coaches").select("id, name, email").eq("id", userId).maybeSingle();
+    if (coach) {
+      return { role: "coach", userId, coachId: userId, name: String(coach.name ?? "Coach"), email: String(coach.email ?? "") };
     }
-    const client = await supabase.from("clients").select("*").eq("id", userId).maybeSingle();
-    if (client.data) {
-      const c = rowToClient(client.data);
-      return { role: "client", userId, coachId: c.coachId, name: c.name, email: c.email, client: c };
+    const { data: clientRow } = await supabase.from("clients").select("*").eq("id", userId).maybeSingle();
+    if (clientRow) {
+      const client = rowToClient(clientRow as Row);
+      return { role: "client", userId, coachId: client.coachId, name: client.name, email: client.email, client };
     }
     return null;
   }
 
   async load(): Promise<AppState> {
-    const [clients, exercises, plans, checkIns, meals, subscriptions, payments, sessions] = await Promise.all(
-      SUPABASE_TABLES.map((t) => supabase.from(t).select("*")),
-    );
-    const err = [clients, exercises, plans, checkIns, meals, subscriptions, payments, sessions].find((r) => r.error);
-    if (err?.error) throw new Error(friendly(err.error.message));
+    const results = await Promise.all(TABLES.map((t) => supabase.from(t).select("*")));
+    const failed = results.find((r) => r.error);
+    if (failed?.error) throw new Error(failed.error.message);
+    const [clients, exercises, plans, checkIns, meals, subscriptions, payments, sessions, messages, notifications] = results;
     return {
-      clients: (clients.data ?? []).map(rowToClient),
-      exercises: (exercises.data ?? []).map(rowToExercise),
-      plans: (plans.data ?? []).map(rowToPlan),
-      checkIns: (checkIns.data ?? []).map(rowToCheckIn),
-      meals: (meals.data ?? []).map(rowToMeal),
-      subscriptions: (subscriptions.data ?? []).map(rowToSubscription),
-      payments: (payments.data ?? []).map(rowToPayment),
-      sessions: (sessions.data ?? []).map(rowToSession),
+      clients: (clients.data as Row[]).map(rowToClient),
+      exercises: (exercises.data as Row[]).map(rowToExercise),
+      plans: (plans.data as Row[]).map(rowToPlan),
+      checkIns: (checkIns.data as Row[]).map(rowToCheckIn),
+      meals: (meals.data as Row[]).map(rowToMeal),
+      subscriptions: (subscriptions.data as Row[]).map(rowToSubscription),
+      payments: (payments.data as Row[]).map(rowToPayment),
+      sessions: (sessions.data as Row[]).map(rowToSession),
+      messages: (messages.data as Row[]).map(rowToMessage),
+      notifications: (notifications.data as Row[]).map(rowToNotification),
     };
   }
 
   async insert(table: string, row: Row): Promise<void> {
     const { error } = await supabase.from(table).insert(row);
-    if (error) throw new Error(friendly(error.message));
+    if (error) throw new Error(error.message);
   }
 
   async update(table: string, id: string, row: Row): Promise<void> {
     const { error } = await supabase.from(table).update(clean(row)).eq("id", id);
-    if (error) throw new Error(friendly(error.message));
+    if (error) throw new Error(error.message);
   }
 
   async remove(table: string, id: string): Promise<void> {
     const { error } = await supabase.from(table).delete().eq("id", id);
-    if (error) throw new Error(friendly(error.message));
-  }
-
-  private edgeUrl(fn: string): string {
-    const base = (import.meta.env.VITE_SUPABASE_URL ?? "").replace(/\/$/, "");
-    return `${base}/functions/v1/${fn}`;
-  }
-
-  private async edgeCall(fn: string, body: unknown): Promise<any> {
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    const res = await fetch(this.edgeUrl(fn), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(body),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json?.error ?? `Edge function failed (${res.status})`);
-    return json;
+    if (error) throw new Error(error.message);
   }
 
   async createClientAccount(input: NewClientInput): Promise<Client> {
-    const json = await this.edgeCall("create-client-account", { action: "create", ...input });
-    return rowToClient(json.client ?? json);
+    const { data, error } = await supabase.functions.invoke("create-client-account", {
+      body: { action: "create", ...input },
+    });
+    if (error) throw new Error(error.message);
+    const body = data as { ok?: boolean; client?: Row; error?: string };
+    if (!body?.ok || !body.client) throw new Error(body?.error ?? "Couldn't create the client account.");
+    return rowToClient(body.client);
   }
 
   async resetClientPassword(clientId: string, newPassword: string): Promise<void> {
-    await this.edgeCall("create-client-account", { action: "reset-password", clientId, newPassword });
+    const { data, error } = await supabase.functions.invoke("create-client-account", {
+      body: { action: "reset-password", clientId, password: newPassword },
+    });
+    if (error) throw new Error(error.message);
+    const body = data as { ok?: boolean; error?: string };
+    if (!body?.ok) throw new Error(body?.error ?? "Couldn't reset the password.");
   }
 
   async deleteClientAccount(clientId: string): Promise<void> {
-    await this.edgeCall("create-client-account", { action: "delete", clientId });
+    const { data } = await supabase.functions.invoke("create-client-account", {
+      body: { action: "delete", clientId },
+    });
+    const body = data as { ok?: boolean } | undefined;
+    if (!body?.ok) {
+      // Fallback: RLS-scoped delete (auth user stays, data cascades).
+      const { error } = await supabase.from("clients").delete().eq("id", clientId);
+      if (error) throw new Error(error.message);
+    }
+  }
+
+  async updateCoachName(name: string): Promise<void> {
+    const userId = await this.getSessionUserId();
+    if (!userId) throw new Error("Not signed in.");
+    const { error } = await supabase.from("coaches").update({ name }).eq("id", userId);
+    if (error) throw new Error(error.message);
   }
 }
 
-function friendly(msg: string): string {
-  if (/invalid login credentials/i.test(msg)) return "Invalid email or password.";
-  if (/already registered/i.test(msg)) return "That email is already registered — try signing in.";
-  if (/at least 6 characters/i.test(msg)) return "Password must be at least 6 characters.";
-  return msg;
-}
-
 /* ================================================================
-   DemoBackend — local, clearly-labelled, for this environment.
+   DemoBackend — local store so the app runs with zero credentials.
    ================================================================ */
 
 const DEMO_DATA_KEY = "forge-demo-data-v1";
 const DEMO_SESSION_KEY = "forge-demo-session-v1";
-const DEMO_COACH_ID = "11111111-1111-4111-8111-111111111111";
-const DEMO_PASSWORD = "demo1234";
+const DEMO_COACH_ID = "coach-demo-0001";
+export const DEMO_PASSWORD = "forge123";
+export const DEMO_COACH_EMAIL = "coach@forge.fit";
 
-interface DemoClientAuth {
+interface DemoAuthEntry {
   password: string;
+  name?: string;
 }
 
-function daysAgo(n: number): string {
+interface DemoStore {
+  state: AppState;
+  auth: Record<string, DemoAuthEntry>;
+}
+
+const daysAgo = (n: number): string => {
   const d = new Date();
   d.setDate(d.getDate() - n);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-function daysAhead(n: number): string {
-  return daysAgo(-n);
-}
+};
+const daysAhead = (n: number): string => daysAgo(-n);
 
-function seedData(): { state: AppState; auth: Record<string, DemoClientAuth> } {
+function seedData(): DemoStore {
   const coachId = DEMO_COACH_ID;
-  const auth: Record<string, DemoClientAuth> = {};
 
-  const mkClient = (
-    id: string,
-    username: string,
-    name: string,
-    goal: Goal,
-    status: ClientStatus,
-    startOffset: number,
-    phone: string,
-  ): Client => {
-    auth[id] = { password: DEMO_PASSWORD };
-    return {
-      id,
-      coachId,
-      username,
-      name,
-      email: "",
-      phone,
-      gender: undefined,
-      age: undefined,
-      goal,
-      startDate: daysAgo(startOffset),
-      status,
-      notes: "",
-      coachNotes: [],
-    };
-  };
+  const mkClient = (username: string, name: string, phone: string, goal: Client["goal"], age: number, gender: Client["gender"]): Client => ({
+    id: uuid(),
+    coachId,
+    username,
+    name,
+    email: `${username}@example.com`,
+    phone,
+    gender,
+    age,
+    goal,
+    startDate: daysAgo(30),
+    status: "Active",
+    notes: "",
+    coachNotes: [],
+    followUpDays: 7,
+  });
 
-  const c1 = mkClient("21111111-1111-4111-8111-111111111111", "ahmed", "Ahmed Samir", "Lose weight", "Active", 60, "01012345678");
-  const c2 = mkClient("22222222-2222-4222-8222-222222222222", "sara", "Sara Ali", "Build muscle", "Active", 45, "01098765432");
-  const c3 = mkClient("23333333-3333-4333-8333-333333333333", "omar", "Omar Khaled", "General fitness", "Active", 30, "01155556666");
-
+  const c1 = mkClient("ahmed", "Ahmed Hassan", "01012345678", "Lose weight", 29, "Male");
+  const c2 = mkClient("sara", "Sara Ali", "+201098765432", "Build muscle", 26, "Female");
+  const c3 = mkClient("omar", "Omar Khaled", "201055551234", "General fitness", 33, "Male");
   const clients = [c1, c2, c3];
 
   const exercises: Exercise[] = [
-    { id: uuid(), coachId, name: "Barbell Bench Press", category: "Chest", description: "Flat barbell press, shoulder blades pinned.", videoUrl: "https://www.youtube.com/results?search_query=barbell+bench+press" },
-    { id: uuid(), coachId, name: "Pull-Up", category: "Back", description: "Dead hang to chin over bar.", videoUrl: "https://www.youtube.com/results?search_query=pull+up" },
+    { id: uuid(), coachId, name: "Barbell Bench Press", category: "Chest", description: "Retract shoulder blades, bar to lower chest.", videoUrl: "https://www.youtube.com/results?search_query=bench+press" },
+    { id: uuid(), coachId, name: "Pull-up", category: "Back", description: "Dead hang to chin over bar. Bands OK.", videoUrl: "https://www.youtube.com/results?search_query=pull+up" },
     { id: uuid(), coachId, name: "Barbell Back Squat", category: "Legs", description: "Break at hips and knees together, below parallel.", videoUrl: "https://www.youtube.com/results?search_query=back+squat" },
     { id: uuid(), coachId, name: "Dumbbell Biceps Curl", category: "Arms", description: "Elbows pinned, slow negative.", videoUrl: "https://www.youtube.com/results?search_query=dumbbell+curl" },
     { id: uuid(), coachId, name: "Plank Hold", category: "Core", description: "Glutes tight, ribs down.", videoUrl: "https://www.youtube.com/results?search_query=plank" },
@@ -570,15 +638,67 @@ function seedData(): { state: AppState; auth: Record<string, DemoClientAuth> } {
     { id: uuid(), coachId, clientId: c1.id, date: daysAhead(1), time: "10:00", type: "Personal Training", status: "Scheduled", notes: "" },
   ];
 
+  const h = 3600_000;
+  const messages: Message[] = [
+    { id: uuid(), coachId, clientId: c1.id, senderRole: "coach", text: "Great session today, Ahmed! Keep the protein high this week.", createdAt: Date.now() - 26 * h },
+    { id: uuid(), coachId, clientId: c1.id, senderRole: "client", text: "Thanks coach! Should I do cardio on rest days?", createdAt: Date.now() - 25 * h },
+    { id: uuid(), coachId, clientId: c1.id, senderRole: "coach", text: "Light 20-min walks are perfect. Save the hard intervals for training days.", createdAt: Date.now() - 2 * h },
+    { id: uuid(), coachId, clientId: c2.id, senderRole: "coach", text: "Bench PR — huge! We'll bump the load 2.5kg next week.", createdAt: Date.now() - 20 * h },
+    { id: uuid(), coachId, clientId: c2.id, senderRole: "client", text: "Let's go!", createdAt: Date.now() - 19 * h },
+    { id: uuid(), coachId, clientId: c3.id, senderRole: "coach", text: "Omar, your plan is ready for this week. Check the Today tab.", createdAt: Date.now() - 8 * h },
+  ];
+
+  const notifications: AppNotification[] = [
+    { id: uuid(), coachId, clientId: c1.id, kind: "message", text: "New message from Coach Dana", createdAt: Date.now() - 2 * h, read: false },
+    { id: uuid(), coachId, clientId: c1.id, kind: "plan_updated", text: "Your workout plan was updated", createdAt: Date.now() - 30 * h, read: true },
+    { id: uuid(), coachId, clientId: c2.id, kind: "message", text: "New message from Coach Dana", createdAt: Date.now() - 20 * h, read: false },
+    { id: uuid(), coachId, clientId: c2.id, kind: "subscription", text: "Your subscription renews in 4 days", createdAt: Date.now() - 6 * h, read: false },
+    { id: uuid(), coachId, clientId: c3.id, kind: "meal_updated", text: "Your meal plan was updated", createdAt: Date.now() - 40 * h, read: true },
+  ];
+
   return {
-    state: { clients, exercises, plans, checkIns, meals, subscriptions, payments, sessions },
-    auth,
+    state: { clients, exercises, plans, checkIns, meals, subscriptions, payments, sessions, messages, notifications },
+    auth: {
+      [DEMO_COACH_ID]: { password: DEMO_PASSWORD, name: "Coach Dana" },
+      [c1.id]: { password: DEMO_PASSWORD },
+      [c2.id]: { password: DEMO_PASSWORD },
+      [c3.id]: { password: DEMO_PASSWORD },
+    },
   };
 }
 
-interface DemoStore {
-  state: AppState;
-  auth: Record<string, DemoClientAuth>;
+/** Backfill stores saved by older versions (missing chat/notification tables). */
+function migrateDemo(parsed: DemoStore): DemoStore {
+  const s = parsed.state;
+  s.clients ??= [];
+  s.exercises ??= [];
+  s.plans ??= [];
+  s.checkIns ??= [];
+  s.meals ??= [];
+  s.subscriptions ??= [];
+  s.payments ??= [];
+  s.sessions ??= [];
+  let changed = false;
+  if (!Array.isArray(s.messages)) {
+    const seeded = seedData();
+    const byName = new Map(seeded.state.clients.map((c, i) => [c.username, s.clients[i]?.id]));
+    s.messages = seeded.state.messages
+      .filter((m) => {
+        const seedClient = seeded.state.clients.find((c) => c.id === m.clientId);
+        return seedClient ? byName.has(seedClient.username) : false;
+      })
+      .map((m) => {
+        const seedClient = seeded.state.clients.find((c) => c.id === m.clientId)!;
+        return { ...m, clientId: byName.get(seedClient.username) ?? m.clientId };
+      });
+    changed = true;
+  }
+  if (!Array.isArray(s.notifications)) {
+    s.notifications = [];
+    changed = true;
+  }
+  if (changed) writeDemo(parsed);
+  return parsed;
 }
 
 function readDemo(): DemoStore {
@@ -586,7 +706,7 @@ function readDemo(): DemoStore {
     const raw = localStorage.getItem(DEMO_DATA_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as DemoStore;
-      if (parsed?.state?.clients) return parsed;
+      if (parsed?.state?.clients) return migrateDemo(parsed);
     }
   } catch {
     /* fall through to reseed */
@@ -604,22 +724,52 @@ function writeDemo(store: DemoStore): void {
   }
 }
 
+type StateKey = keyof AppState;
+function tableToKey(table: string): StateKey {
+  const map: Record<string, StateKey> = {
+    clients: "clients",
+    exercises: "exercises",
+    plan_items: "plans",
+    check_ins: "checkIns",
+    meals: "meals",
+    subscriptions: "subscriptions",
+    payments: "payments",
+    sessions: "sessions",
+    messages: "messages",
+    notifications: "notifications",
+  };
+  return map[table] ?? "clients";
+}
+
 class DemoBackend implements Backend {
   readonly kind = "demo" as const;
   private listeners = new Set<(userId: string | null) => void>();
 
   private session(): { userId: string; role: "coach" | "client" } | null {
     try {
-      const raw = localStorage.getItem(DEMO_SESSION_KEY);
+      // A still-live non-remembered (sessionStorage) session takes precedence.
+      const raw = sessionStorage.getItem(DEMO_SESSION_KEY) ?? localStorage.getItem(DEMO_SESSION_KEY);
       return raw ? (JSON.parse(raw) as { userId: string; role: "coach" | "client" }) : null;
     } catch {
       return null;
     }
   }
 
-  private setSession(userId: string | null, role: "coach" | "client" = "coach"): void {
-    if (userId) localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify({ userId, role }));
-    else localStorage.removeItem(DEMO_SESSION_KEY);
+  private setSession(userId: string | null, role: "coach" | "client" = "coach", remember = true): void {
+    setRemember(remember);
+    try {
+      if (userId) {
+        const payload = JSON.stringify({ userId, role });
+        (remember ? localStorage : sessionStorage).setItem(DEMO_SESSION_KEY, payload);
+        // Keep the two stores mutually exclusive.
+        (remember ? sessionStorage : localStorage).removeItem(DEMO_SESSION_KEY);
+      } else {
+        localStorage.removeItem(DEMO_SESSION_KEY);
+        sessionStorage.removeItem(DEMO_SESSION_KEY);
+      }
+    } catch {
+      /* storage unavailable — non-fatal */
+    }
     this.listeners.forEach((cb) => cb(userId));
   }
 
@@ -632,24 +782,26 @@ class DemoBackend implements Backend {
     return () => this.listeners.delete(cb);
   }
 
-  async coachSignUp(_email: string, password: string, _name: string): Promise<void> {
+  async coachSignUp(_email: string, password: string, _name: string, remember: boolean): Promise<void> {
     if (password !== DEMO_PASSWORD) throw new Error(`Demo mode: use password "${DEMO_PASSWORD}".`);
-    this.setSession(DEMO_COACH_ID, "coach");
+    this.setSession(DEMO_COACH_ID, "coach", remember);
   }
 
-  async coachSignIn(_email: string, password: string): Promise<void> {
-    if (password !== DEMO_PASSWORD) throw new Error(`Demo mode: use password "${DEMO_PASSWORD}".`);
-    this.setSession(DEMO_COACH_ID, "coach");
+  async coachSignIn(email: string, password: string, remember: boolean): Promise<void> {
+    if (email.trim().toLowerCase() !== DEMO_COACH_EMAIL || password !== DEMO_PASSWORD) {
+      throw new Error(`Demo mode: use ${DEMO_COACH_EMAIL} / ${DEMO_PASSWORD}.`);
+    }
+    this.setSession(DEMO_COACH_ID, "coach", remember);
   }
 
-  async clientSignIn(username: string, password: string): Promise<void> {
+  async clientSignIn(username: string, password: string, remember: boolean): Promise<void> {
     const store = readDemo();
     const uname = username.trim().toLowerCase();
     const client = store.state.clients.find((c) => c.username.toLowerCase() === uname);
-    if (!client || store.auth[client.id]?.password !== password) {
-      throw new Error("Invalid username or password.");
-    }
-    this.setSession(client.id, "client");
+    if (!client) throw new Error("Invalid username or password.");
+    const entry = store.auth[client.id];
+    if (!entry || entry.password !== password) throw new Error("Invalid username or password.");
+    this.setSession(client.id, "client", remember);
   }
 
   async signOut(): Promise<void> {
@@ -658,34 +810,54 @@ class DemoBackend implements Backend {
 
   async resolveRole(userId: string): Promise<RoleInfo | null> {
     if (userId === DEMO_COACH_ID) {
-      return { role: "coach", userId, coachId: DEMO_COACH_ID, name: "Coach Dana", email: "coach@forge.demo" };
+      const store = readDemo();
+      return {
+        role: "coach",
+        userId,
+        coachId: DEMO_COACH_ID,
+        name: store.auth[DEMO_COACH_ID]?.name ?? "Coach Dana",
+        email: DEMO_COACH_EMAIL,
+      };
     }
     const store = readDemo();
     const client = store.state.clients.find((c) => c.id === userId);
-    if (client) {
-      return { role: "client", userId, coachId: client.coachId, name: client.name, email: client.email, client };
-    }
-    return null;
+    if (!client) return null;
+    return { role: "client", userId, coachId: DEMO_COACH_ID, name: client.name, email: client.email, client };
   }
 
   async load(): Promise<AppState> {
     const store = readDemo();
-    const s = this.session();
-    if (s?.role === "client") {
+    const s = store.state;
+    const safe: AppState = {
+      clients: s.clients ?? [],
+      exercises: s.exercises ?? [],
+      plans: s.plans ?? [],
+      checkIns: s.checkIns ?? [],
+      meals: s.meals ?? [],
+      subscriptions: s.subscriptions ?? [],
+      payments: s.payments ?? [],
+      sessions: s.sessions ?? [],
+      messages: s.messages ?? [],
+      notifications: s.notifications ?? [],
+    };
+    const sess = this.session();
+    if (sess?.role === "client") {
       // A client only ever sees their own slice.
-      const id = s.userId;
+      const id = sess.userId;
       return {
-        clients: store.state.clients.filter((c) => c.id === id),
-        exercises: store.state.exercises,
-        plans: store.state.plans.filter((p) => p.clientId === id),
-        checkIns: store.state.checkIns.filter((c) => c.clientId === id),
-        meals: store.state.meals.filter((m) => m.clientId === id),
-        subscriptions: store.state.subscriptions.filter((x) => x.clientId === id),
-        payments: store.state.payments.filter((x) => x.clientId === id),
-        sessions: store.state.sessions.filter((x) => x.clientId === id),
+        clients: safe.clients.filter((c) => c.id === id),
+        exercises: safe.exercises,
+        plans: safe.plans.filter((p) => p.clientId === id),
+        checkIns: safe.checkIns.filter((c) => c.clientId === id),
+        meals: safe.meals.filter((m) => m.clientId === id),
+        subscriptions: safe.subscriptions.filter((x) => x.clientId === id),
+        payments: safe.payments.filter((x) => x.clientId === id),
+        sessions: safe.sessions.filter((x) => x.clientId === id),
+        messages: safe.messages.filter((x) => x.clientId === id),
+        notifications: safe.notifications.filter((x) => x.clientId === id),
       };
     }
-    return JSON.parse(JSON.stringify(store.state)) as AppState;
+    return JSON.parse(JSON.stringify(safe)) as AppState;
   }
 
   private mutate(fn: (s: AppState) => void): void {
@@ -707,8 +879,6 @@ class DemoBackend implements Backend {
       const arr = s[key] as unknown as { id: string }[];
       const i = arr.findIndex((x) => x.id === id);
       if (i < 0) return;
-      // Merge over the existing entity so immutable fields (coach_id,
-      // username, created_at…) are preserved.
       const merged = { ...entityToRow(table, arr[i]), ...row, id };
       arr[i] = rowFromTable(table, merged) as never;
     });
@@ -754,7 +924,7 @@ class DemoBackend implements Backend {
 
   async resetClientPassword(clientId: string, newPassword: string): Promise<void> {
     const store = readDemo();
-    store.auth[clientId] = { password: newPassword };
+    store.auth[clientId] = { ...store.auth[clientId], password: newPassword };
     writeDemo(store);
   }
 
@@ -767,76 +937,21 @@ class DemoBackend implements Backend {
       s.subscriptions = s.subscriptions.filter((x) => x.clientId !== clientId);
       s.payments = s.payments.filter((x) => x.clientId !== clientId);
       s.sessions = s.sessions.filter((x) => x.clientId !== clientId);
+      s.messages = s.messages.filter((x) => x.clientId !== clientId);
+      s.notifications = s.notifications.filter((x) => x.clientId !== clientId);
     });
     const fresh = readDemo();
     delete fresh.auth[clientId];
     writeDemo(fresh);
   }
-}
 
-type StateKey = keyof AppState;
-function tableToKey(table: string): StateKey {
-  const map: Record<string, StateKey> = {
-    clients: "clients",
-    exercises: "exercises",
-    plan_items: "plans",
-    check_ins: "checkIns",
-    meals: "meals",
-    subscriptions: "subscriptions",
-    payments: "payments",
-    sessions: "sessions",
-  };
-  return map[table] ?? "clients";
-}
-
-/** Rebuild a typed entity from a raw snake_case row for the demo store. */
-function rowFromTable(table: string, row: Row): unknown {
-  switch (table) {
-    case "clients":
-      return rowToClient(row);
-    case "exercises":
-      return rowToExercise(row);
-    case "plan_items":
-      return rowToPlan(row);
-    case "check_ins":
-      return rowToCheckIn(row);
-    case "meals":
-      return rowToMeal(row);
-    case "subscriptions":
-      return rowToSubscription(row);
-    case "payments":
-      return rowToPayment(row);
-    case "sessions":
-      return rowToSession(row);
-    default:
-      return row;
-  }
-}
-
-/** Convert a typed entity back to a full snake_case row (for demo merges). */
-function entityToRow(table: string, entity: any): Row {
-  switch (table) {
-    case "clients":
-      return { id: entity.id, coach_id: entity.coachId, username: entity.username, ...clientToRow(entity) };
-    case "exercises":
-      return exerciseToRow(entity);
-    case "plan_items":
-      return planToRow(entity);
-    case "check_ins":
-      return checkInToRow(entity);
-    case "meals":
-      return mealToRow(entity);
-    case "subscriptions":
-      return subscriptionToRow(entity);
-    case "payments":
-      return paymentToRow(entity);
-    case "sessions":
-      return sessionToRow(entity);
-    default:
-      return entity;
+  async updateCoachName(name: string): Promise<void> {
+    const store = readDemo();
+    store.auth[DEMO_COACH_ID] = { ...store.auth[DEMO_COACH_ID], password: store.auth[DEMO_COACH_ID]?.password ?? DEMO_PASSWORD, name };
+    writeDemo(store);
   }
 }
 
 /* ---------------- singleton ---------------- */
 
-export const backend: Backend = isSupabaseConfigured ? new SupabaseBackend() : new DemoBackend();
+export const backend: Backend = isDemoMode ? new DemoBackend() : new SupabaseBackend();

@@ -1,13 +1,11 @@
 /* ================================================================
-   FORGE — small pure helpers (dates, ids, phones, images)
+   FORGE — date/format helpers.
    ================================================================ */
 
 import { v4 as uuidv4 } from "uuid";
 
-/** RFC-4122 uuid — Postgres `uuid` columns require this shape. */
 export const uuid = (): string => uuidv4();
 
-/** Short local id for notes etc. (never used as a Postgres PK). */
 export const uid = (): string =>
   Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 
@@ -27,15 +25,11 @@ export const addDays = (iso: string, n: number): string => {
   return toISO(d);
 };
 
-export const fmtDate = (iso: string): string => {
-  if (!iso) return "—";
-  return fromISO(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
-};
+export const fmtDate = (iso: string): string =>
+  fromISO(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
-export const fmtShort = (iso: string): string => {
-  if (!iso) return "—";
-  return fromISO(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-};
+export const fmtShort = (iso: string): string =>
+  fromISO(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
 export const relDay = (iso: string): string => {
   const today = todayISO();
@@ -47,16 +41,16 @@ export const relDay = (iso: string): string => {
 /** Monday = 1 ... Sunday = 7 */
 export const dayNum = (d: Date = new Date()): number => ((d.getDay() + 6) % 7) + 1;
 
-/** Whole days from `fromIso` to `toIso` (positive when `toIso` is later). */
+/** Whole days from → to (positive when `to` is in the future). */
 export const diffDays = (fromIso: string, toIso: string): number =>
   Math.round((fromISO(toIso).getTime() - fromISO(fromIso).getTime()) / 86_400_000);
 
 export const fmtTime = (t: string): string => {
-  if (!t) return "";
   const [h, m] = t.split(":").map(Number);
-  const hr = ((h ?? 0) + 11) % 12 + 1;
-  const ap = (h ?? 0) >= 12 ? "PM" : "AM";
-  return `${String(hr).padStart(2, "0")}:${String(m ?? 0).padStart(2, "0")} ${ap}`;
+  const hh = h ?? 0;
+  const suffix = hh >= 12 ? "PM" : "AM";
+  const h12 = hh % 12 === 0 ? 12 : hh % 12;
+  return `${h12}:${String(m ?? 0).padStart(2, "0")} ${suffix}`;
 };
 
 export const fmtMoney = (n: number): string => n.toLocaleString("en-US");
@@ -79,11 +73,7 @@ export const hueOf = (s: string): number => {
   return h;
 };
 
-/**
- * Normalise a phone number for wa.me — supports Egyptian local formats
- * (01xxxxxxxxx, 201xxxxxxxxx, +201xxxxxxxxx, 00201xxxxxxxxx) as well as
- * international numbers. Returns null when nothing usable remains.
- */
+/** Normalise a phone number for wa.me (Egyptian local formats + international). */
 export function normalizePhone(raw?: string): string | null {
   if (!raw) return null;
   let digits = raw.replace(/\D/g, "");
@@ -129,14 +119,24 @@ export function fileToDataUrl(file: File, max = 720): Promise<string> {
 }
 
 export const errorMessage = (e: unknown): string =>
-  e instanceof Error ? e.message : typeof e === "string" ? e : "Something went wrong";
+  e instanceof Error ? e.message : "Something went wrong.";
 
-/** A random human-friendly password for new client accounts. */
 export function randomPassword(): string {
-  const words = ["forge", "lift", "iron", "pulse", "core", "surge", "grit", "peak"];
-  const w = words[Math.floor(Math.random() * words.length)];
-  const n = Math.floor(100 + Math.random() * 900);
-  return `${w}-${n}-Go`;
+  const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  let out = "";
+  for (let i = 0; i < 10; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
 }
 
 export const isValidUsername = (u: string): boolean => /^[a-z0-9_.-]{3,24}$/.test(u.toLowerCase());
+
+export const relTime = (ts: number): string => {
+  const diff = Date.now() - ts;
+  const m = Math.floor(diff / 60_000);
+  if (m < 1) return "Just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  if (h < 48) return "Yesterday";
+  return toISO(new Date(ts)).slice(5).replace("-", "/");
+};

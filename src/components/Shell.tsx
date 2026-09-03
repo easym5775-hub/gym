@@ -4,7 +4,6 @@
 
 import type { ReactNode } from "react";
 import {
-  CalendarDays,
   Camera,
   ClipboardList,
   Dumbbell,
@@ -29,20 +28,6 @@ const NAV: { id: CoachView; label: string; icon: (p: { className?: string }) => 
   { id: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
-function Logo() {
-  return (
-    <div className="group flex items-center gap-2.5 px-4 pb-6 pt-5">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-volt-400 text-night-950 shadow-[0_8px_24px_-8px_rgba(205,241,75,0.6)] transition-transform duration-500 ease-out group-hover:-rotate-12 group-hover:scale-105">
-        <Dumbbell className="h-5 w-5" strokeWidth={2.2} />
-      </span>
-      <div>
-        <p className="font-display text-xl font-bold uppercase leading-none tracking-wide text-mist-100">Forge</p>
-        <p className="mt-0.5 text-[9.5px] font-bold uppercase tracking-[0.28em] text-mist-500">Coaching OS</p>
-      </div>
-    </div>
-  );
-}
-
 export function CoachShell({
   view,
   setView,
@@ -65,7 +50,15 @@ export function CoachShell({
 
       {/* sidebar */}
       <aside className="sticky top-0 z-30 hidden h-screen w-[232px] shrink-0 flex-col border-e border-night-700 bg-night-900/80 backdrop-blur lg:flex">
-        <Logo />
+        <div className="group flex items-center gap-2.5 px-4 pb-6 pt-5">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-volt-400 text-night-950 shadow-[0_8px_24px_-8px_rgba(205,241,75,0.6)] transition-transform duration-500 ease-out group-hover:-rotate-12 group-hover:scale-105">
+            <Dumbbell className="h-5 w-5" strokeWidth={2.2} />
+          </span>
+          <div>
+            <p className="font-display text-xl font-bold uppercase leading-none tracking-wide text-mist-100">Forge</p>
+            <p className="mt-0.5 text-[9.5px] font-bold uppercase tracking-[0.28em] text-mist-500">Coaching OS</p>
+          </div>
+        </div>
         <nav className="flex flex-col gap-1 px-3">
           {NAV.map((item) => {
             const active = isActive(item.id);
@@ -82,7 +75,7 @@ export function CoachShell({
                 <Icon className="h-[18px] w-[18px]" />
                 {item.label}
                 {item.id === "clients" && (
-                  <span className={`ms-auto rounded-md px-1.5 py-0.5 font-display text-[11px] leading-4 ${active ? "bg-night-600 text-volt-300" : "bg-night-800 text-mist-500"}`}>
+                  <span className={`ms-auto rounded-md px-1.5 py-0.5 font-display text-[11px] leading-4 tnum ${active ? "bg-night-600 text-volt-300" : "bg-night-800 text-mist-500"}`}>
                     {state.clients.length}
                   </span>
                 )}
@@ -170,5 +163,3 @@ export function PageHeader({
     </header>
   );
 }
-
-void CalendarDays;
