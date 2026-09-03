@@ -10,26 +10,26 @@ import { useApp } from "../store";
 /* ---------------- class recipes ---------------- */
 
 export const inputCls =
-  "h-10 w-full rounded-lg border border-night-600 bg-night-800 px-3 text-sm text-mist-100 placeholder:text-mist-500 outline-none transition focus:border-volt-400";
+  "h-11 w-full rounded-xl border border-night-600 bg-night-800 px-3.5 text-sm text-mist-100 placeholder:text-mist-500 outline-none transition-all duration-200 focus:border-volt-400 focus:shadow-[inset_0_0_0_1px_rgba(205,241,75,0.15)]";
 
 export const textareaCls =
-  "w-full min-h-20 resize-y rounded-lg border border-night-600 bg-night-800 px-3 py-2 text-sm text-mist-100 placeholder:text-mist-500 outline-none transition focus:border-volt-400";
+  "w-full min-h-24 resize-y rounded-xl border border-night-600 bg-night-800 px-3.5 py-2.5 text-sm text-mist-100 placeholder:text-mist-500 outline-none transition-all duration-200 focus:border-volt-400 focus:shadow-[inset_0_0_0_1px_rgba(205,241,75,0.15)]";
 
-export const labelCls = "mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-mist-400";
+export const labelCls = "mb-2 block text-[11px] font-bold uppercase tracking-wider text-mist-400";
 
 export const btnPrimary =
-  "inline-flex items-center justify-center gap-2 rounded-lg bg-volt-400 px-4 py-2 text-sm font-bold text-night-950 shadow-[0_8px_24px_-10px_rgba(205,241,75,0.6)] transition hover:bg-volt-300 active:scale-[0.98] cursor-pointer disabled:pointer-events-none disabled:opacity-40";
+  "inline-flex items-center justify-center gap-2.5 rounded-xl bg-volt-400 px-5 py-2.5 text-sm font-bold text-night-950 shadow-[0_8px_24px_-10px_rgba(205,241,75,0.6)] transition-all duration-200 hover:bg-volt-300 hover:shadow-[0_12px_32px_-10px_rgba(205,241,75,0.75)] active:scale-[0.97] cursor-pointer disabled:pointer-events-none disabled:opacity-40";
 
 export const btnSecondary =
-  "inline-flex items-center justify-center gap-2 rounded-lg border border-night-600 bg-night-800 px-4 py-2 text-sm font-semibold text-mist-100 transition hover:border-night-500 hover:bg-night-700 active:scale-[0.98] cursor-pointer disabled:pointer-events-none disabled:opacity-40";
+  "inline-flex items-center justify-center gap-2.5 rounded-xl border border-night-600 bg-night-800 px-4 py-2.5 text-sm font-semibold text-mist-100 transition-all duration-200 hover:border-night-500 hover:bg-night-700 active:scale-[0.97] cursor-pointer disabled:pointer-events-none disabled:opacity-40";
 
 export const btnDanger =
-  "inline-flex items-center justify-center gap-2 rounded-lg border border-danger-500/30 bg-danger-500/10 px-4 py-2 text-sm font-semibold text-danger-300 transition hover:border-danger-500/60 hover:bg-danger-500/20 active:scale-[0.98] cursor-pointer";
+  "inline-flex items-center justify-center gap-2.5 rounded-xl border border-danger-500/30 bg-danger-500/10 px-4 py-2.5 text-sm font-semibold text-danger-300 transition-all duration-200 hover:border-danger-500/60 hover:bg-danger-500/20 active:scale-[0.97] cursor-pointer";
 
 export const btnSm = "!px-3 !py-1.5 !text-xs";
 
 export const chip =
-  "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-bold leading-5";
+  "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-bold leading-5";
 
 /* ---------------- hooks ---------------- */
 
@@ -74,11 +74,11 @@ export function Avatar({
 }) {
   const h = hueOf(name);
   if (photo) {
-    return <img src={photo} alt={name} className={`shrink-0 rounded-lg object-cover ring-1 ring-night-600 ${className}`} />;
+    return <img src={photo} alt={name} className={`shrink-0 rounded-xl object-cover ring-1 ring-night-600 ${className}`} />;
   }
   return (
     <div
-      className={`grid shrink-0 place-items-center rounded-lg font-display font-bold ${className}`}
+      className={`grid shrink-0 place-items-center rounded-xl font-display font-bold ${className}`}
       style={{ background: `hsl(${h} 32% 18%)`, color: `hsl(${h} 65% 72%)` }}
     >
       {initials(name)}
@@ -103,13 +103,13 @@ export function Toggle({
       aria-pressed={checked}
     >
       <span
-        className={`relative h-5 w-10 rounded-full border transition-colors duration-200 ${
+        className={`relative h-6 w-11 rounded-full border transition-colors duration-200 ${
           checked ? "border-volt-500 bg-volt-400/90" : "border-night-500 bg-night-700"
         }`}
       >
         <span
-          className={`absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full shadow transition-all duration-200 ${
-            checked ? "start-[calc(100%-1.1rem)] bg-night-950" : "start-0.5 bg-mist-400"
+          className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full shadow-lg transition-all duration-200 ${
+            checked ? "start-[calc(100%-1.2rem)] bg-night-950" : "start-1 bg-mist-400"
           }`}
         />
       </span>
@@ -172,11 +172,11 @@ export function SectionCard({
 }) {
   return (
     <section
-      className={`rise rounded-xl border border-night-700 bg-night-850 shadow-sm ${className}`}
+      className={`rise rounded-2xl border border-night-700 bg-night-850 shadow-sm ${className}`}
       style={{ animationDelay: `${delay}ms` }}
     >
-      <header className="flex items-center justify-between gap-3 border-b border-night-700 px-5 py-3.5">
-        <h2 className="flex items-center gap-2 font-display text-lg font-semibold uppercase tracking-wide text-mist-100">
+      <header className="flex items-center justify-between gap-3 border-b border-night-700 px-5 py-4">
+        <h2 className="flex items-center gap-2.5 font-display text-lg font-bold uppercase tracking-wide text-mist-100">
           {icon && <span className="text-volt-400">{icon}</span>}
           {title}
         </h2>
@@ -199,17 +199,17 @@ export function EmptyState({
   children?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-night-600 bg-night-800/40 px-6 py-10 text-center">
-      <div className="grid h-12 w-12 place-items-center rounded-xl bg-night-800 text-volt-400 ring-1 ring-night-600">{icon}</div>
-      <p className="font-display text-lg font-semibold text-mist-100">{title}</p>
-      {sub && <p className="max-w-xs text-xs leading-5 text-mist-400">{sub}</p>}
+    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-night-600 bg-night-800/40 px-6 py-12 text-center">
+      <div className="grid h-14 w-14 place-items-center rounded-2xl bg-night-800 text-volt-400 ring-1 ring-night-600">{icon}</div>
+      <p className="font-display text-xl font-bold uppercase tracking-wide text-mist-100">{title}</p>
+      {sub && <p className="max-w-xs text-xs leading-6 text-mist-400">{sub}</p>}
       {children}
     </div>
   );
 }
 
 export function Skeleton({ className = "" }: { className?: string }) {
-  return <div className={`skeleton rounded-md ${className}`} />;
+  return <div className={`skeleton rounded-xl ${className}`} />;
 }
 
 export function Modal({
@@ -242,18 +242,18 @@ export function Modal({
     <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-6">
       <div className="animate-fade absolute inset-0 bg-night-950/80 backdrop-blur-[2px]" onClick={onClose} />
       <div
-        className={`animate-pop relative max-h-[90vh] w-full overflow-y-auto rounded-xl border border-night-600 bg-night-850 shadow-2xl ${
+        className={`animate-pop relative max-h-[90vh] w-full overflow-y-auto rounded-2xl border border-night-600 bg-night-850 shadow-2xl ${
           wide ? "max-w-2xl" : "max-w-md"
         }`}
       >
-        <div className="sticky top-0 z-10 flex items-start justify-between border-b border-night-700 bg-night-850 px-5 py-3.5">
+        <div className="sticky top-0 z-10 flex items-start justify-between border-b border-night-700 bg-night-850 px-5 py-4">
           <div>
-            <h3 className="font-display text-xl font-semibold uppercase tracking-wide text-mist-100">{title}</h3>
+            <h3 className="font-display text-xl font-bold uppercase tracking-wide text-mist-100">{title}</h3>
             {description && <p className="mt-0.5 text-xs text-mist-500">{description}</p>}
           </div>
           <button
             onClick={onClose}
-            className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-lg text-mist-400 transition hover:bg-night-700 hover:text-mist-100"
+            className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-xl text-mist-400 transition hover:bg-night-700 hover:text-mist-100"
             aria-label="Close"
           >
             <X className="h-5 w-5" />

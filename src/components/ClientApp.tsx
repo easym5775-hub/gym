@@ -84,17 +84,17 @@ export function ClientApp({ onLogout }: { onLogout: () => void }) {
       <div className="app-glow pointer-events-none fixed inset-0" />
       <div className="dot-grid pointer-events-none fixed inset-0 opacity-40" />
 
-      <header className="sticky top-0 z-40 border-b border-night-700 bg-night-900/90 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-night-700 bg-night-900/90 backdrop-blur-md">
         <span className="absolute inset-x-0 bottom-[-1px] h-px bg-gradient-to-r from-transparent via-volt-400/40 to-transparent" />
         <div className="mx-auto flex w-full max-w-4xl items-center gap-3 px-4 py-3 sm:px-6">
-          <Avatar name={client.name} photo={client.photo} className="h-10 w-10 text-xs" />
+          <Avatar name={client.name} photo={client.photo} className="h-11 w-11 text-xs" />
           <div className="min-w-0">
             <p className="truncate font-display text-lg font-bold uppercase leading-5 tracking-wide text-mist-100">{client.name}</p>
-            <span className={`${chip} mt-0.5 ${GOAL_META[client.goal].chip}`}>{client.goal}</span>
+            <span className={`${chip} mt-1 ${GOAL_META[client.goal].chip}`}>{client.goal}</span>
           </div>
           <nav className="ms-auto hidden gap-1.5 sm:flex">
             {tabs.map((t) => (
-              <button key={t.id} onClick={() => setTab(t.id)} className={`relative cursor-pointer rounded-full px-3.5 py-1.5 text-xs font-bold transition ${tab === t.id ? "bg-volt-400 text-night-950" : "bg-night-800 text-mist-400 hover:text-mist-100"}`}>
+              <button key={t.id} onClick={() => setTab(t.id)} className={`relative cursor-pointer rounded-full px-4 py-2 text-xs font-bold transition-all duration-200 ${tab === t.id ? "bg-volt-400 text-night-950 shadow-[0_4px_16px_-6px_rgba(205,241,75,0.5)]" : "bg-night-800 text-mist-400 hover:text-mist-100"}`}>
                 {t.label}
                 {t.id === "chat" && unread > 0 && tab !== "chat" && (
                   <span className="absolute -end-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-danger-500 px-1 font-display text-[10px] font-bold leading-none text-white tnum">{unread}</span>
@@ -106,7 +106,7 @@ export function ClientApp({ onLogout }: { onLogout: () => void }) {
           <div className="relative ms-auto sm:ms-0">
             <button
               onClick={() => setBellOpen(!bellOpen)}
-              className="relative grid h-9 w-9 cursor-pointer place-items-center rounded-lg border border-night-600 text-mist-400 transition hover:border-night-500 hover:text-mist-100"
+              className="relative grid h-10 w-10 cursor-pointer place-items-center rounded-xl border border-night-600 text-mist-400 transition-all duration-200 hover:border-night-500 hover:bg-night-800 hover:text-mist-100"
               aria-label="Notifications"
             >
               <Bell className="h-4 w-4" />
@@ -119,9 +119,9 @@ export function ClientApp({ onLogout }: { onLogout: () => void }) {
             {bellOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setBellOpen(false)} />
-                <div className="animate-pop absolute end-0 top-11 z-50 w-80 overflow-hidden rounded-xl border border-night-600 bg-night-850 shadow-2xl">
-                  <div className="flex items-center justify-between border-b border-night-700 px-4 py-2.5">
-                    <p className="font-display text-sm font-semibold uppercase tracking-wide text-mist-100">Notifications</p>
+                <div className="animate-pop absolute end-0 top-11 z-50 w-80 overflow-hidden rounded-2xl border border-night-600 bg-night-850 shadow-2xl">
+                  <div className="flex items-center justify-between border-b border-night-700 px-4 py-3">
+                    <p className="font-display text-sm font-bold uppercase tracking-wide text-mist-100">Notifications</p>
                     {unread > 0 && (
                       <button className="cursor-pointer text-[11px] font-bold text-volt-300 transition hover:text-volt-200" onClick={() => markAllNotificationsRead(clientId)}>
                         Mark all read
@@ -151,13 +151,13 @@ export function ClientApp({ onLogout }: { onLogout: () => void }) {
               </>
             )}
           </div>
-          <button onClick={onLogout} className="grid h-9 w-9 cursor-pointer place-items-center rounded-lg border border-night-600 text-mist-400 transition hover:border-night-500 hover:text-mist-100" aria-label="Sign out">
+          <button onClick={onLogout} className="grid h-10 w-10 cursor-pointer place-items-center rounded-xl border border-night-600 text-mist-400 transition-all duration-200 hover:border-night-500 hover:bg-night-800 hover:text-mist-100" aria-label="Sign out">
             <LogOut className="h-4 w-4" />
           </button>
         </div>
         <nav className="mx-auto flex w-full max-w-4xl gap-1.5 overflow-x-auto px-4 pb-3 sm:hidden">
           {tabs.map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)} className={`relative whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-bold transition ${tab === t.id ? "bg-volt-400 text-night-950" : "bg-night-800 text-mist-400"}`}>
+            <button key={t.id} onClick={() => setTab(t.id)} className={`relative whitespace-nowrap rounded-full px-4 py-2 text-xs font-bold transition-all duration-200 ${tab === t.id ? "bg-volt-400 text-night-950 shadow-[0_4px_16px_-6px_rgba(205,241,75,0.5)]" : "bg-night-800 text-mist-400"}`}>
               {t.label}
               {t.id === "chat" && unread > 0 && tab !== "chat" && (
                 <span className="absolute -end-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-danger-500 px-1 font-display text-[10px] font-bold leading-none text-white tnum">{unread}</span>
@@ -200,7 +200,7 @@ function TodayTab({
 
   return (
     <div className="grid gap-4">
-      <div className="rise relative overflow-hidden rounded-xl border border-night-700 bg-night-850 p-5 sm:p-6">
+      <div className="rise relative overflow-hidden rounded-2xl border border-night-700 bg-night-850 p-5 sm:p-6">
         <div className="pointer-events-none absolute inset-0 opacity-[0.35]" style={{ backgroundImage: "repeating-linear-gradient(-45deg, transparent 0 14px, rgba(205,241,75,0.04) 14px 15px)" }} />
         <div className="relative flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -222,7 +222,7 @@ function TodayTab({
         <SectionCard title="Today's sessions" icon={<ClipboardList className="h-4.5 w-4.5" />} bodyCls="p-3">
           <ul className="grid gap-2">
             {sessionsToday.map((s) => (
-              <li key={s.id} className="flex items-center gap-3 rounded-lg border border-night-700 bg-night-800 p-3">
+              <li key={s.id} className="flex items-center gap-3 rounded-xl border border-night-700 bg-night-800 p-3 transition hover:border-night-500">
                 <span className="font-display text-lg font-bold text-mist-100 tnum">{s.time}</span>
                 <span className="text-sm font-semibold text-mist-300">{s.type}</span>
                 <Badge className="ms-auto border-night-600 bg-night-700 text-mist-300">{s.status}</Badge>
