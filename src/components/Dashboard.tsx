@@ -192,7 +192,7 @@ export function Dashboard({
       </header>
 
       {/* KPI band */}
-      <div className="rise mt-7 grid grid-cols-2 overflow-hidden rounded-xl border border-night-700 bg-night-850 lg:grid-cols-5" style={{ animationDelay: "60ms" }}>
+      <div className="rise mt-7 grid grid-cols-2 overflow-hidden rounded-2xl border border-night-700 bg-night-850 lg:grid-cols-5" style={{ animationDelay: "60ms" }}>
         <Kpi delay={0} label="Active clients" value={String(Math.round(animActive))} sub={`of ${state.clients.length} on the roster`} icon={<Users className="h-4 w-4" />} onClick={() => openClientsWithFilter("Active")} />
         <Kpi delay={60} label="Sessions today" value={String(Math.round(animSessions))} sub={todaySessions.length ? `${completedToday} completed` : "schedule is clear"} icon={<CalendarDays className="h-4 w-4" />} />
         <Kpi delay={120} label="New check-ins" value={String(Math.round(animCheckIns))} sub={lastCheckInClient ? `latest from ${lastCheckInClient}` : "last 24 hours"} icon={<Camera className="h-4 w-4" />} onClick={() => go("checkins")} />
@@ -203,13 +203,13 @@ export function Dashboard({
       {/* attention + schedule */}
       <div className="mt-5 grid gap-5 lg:grid-cols-12">
         {/* needs attention */}
-        <section className="rise flex h-full flex-col rounded-xl border border-night-700 bg-night-850 lg:col-span-7" style={{ animationDelay: "120ms" }}>
+        <section className="rise flex h-full flex-col rounded-2xl border border-night-700 bg-night-850 lg:col-span-7" style={{ animationDelay: "120ms" }}>
           <header className="flex items-center gap-2.5 border-b border-night-700 px-5 py-3.5">
             <h2 className="font-display text-base font-semibold uppercase tracking-wide text-mist-100">Needs attention</h2>
             {alerts.length > 0 ? (
-              <span className="rounded-md bg-danger-500/15 px-2 py-0.5 font-display text-sm font-bold leading-5 text-danger-300 tnum">{alerts.length}</span>
+              <span className="rounded-xl bg-danger-500/15 px-2 py-0.5 font-display text-sm font-bold leading-5 text-danger-300 tnum">{alerts.length}</span>
             ) : (
-              <span className="rounded-md bg-moss-400/15 px-2 py-0.5 font-display text-sm font-bold leading-5 text-moss-300">clear</span>
+              <span className="rounded-xl bg-moss-400/15 px-2 py-0.5 font-display text-sm font-bold leading-5 text-moss-300">clear</span>
             )}
             {alerts.length > 0 && (
               <button className={`${btnSecondary} ${btnSm} ms-auto`} onClick={() => openClientsWithFilter("Active")}>
@@ -231,7 +231,7 @@ export function Dashboard({
             <ul className="divide-y divide-night-700/70">
               {alerts.slice(0, 6).map((a, i) => (
                 <li key={a.key} className="rise" style={{ animationDelay: `${160 + i * 45}ms` }}>
-                  <div className="group flex items-center gap-3.5 px-5 py-3 transition-colors hover:bg-night-800/60">
+                  <div className="group flex items-center gap-3.5 px-5 py-3 transition-all duration-200 hover:bg-night-800/60">
                     <span className="relative grid h-10 w-10 shrink-0 place-items-center">
                       <span className={`absolute inset-0 rounded-full ring-4 ${SEV_RING[a.severity]}`} />
                       <Avatar name={a.client.name} photo={a.client.photo} className="h-10 w-10 text-xs" />
@@ -255,7 +255,7 @@ export function Dashboard({
               ))}
               {alerts.length > 6 && (
                 <li className="px-5 py-2.5 text-center">
-                  <button className="cursor-pointer text-xs font-bold text-mist-400 transition hover:text-volt-300" onClick={() => openClientsWithFilter("Active")}>
+                  <button className="cursor-pointer text-xs font-bold text-mist-400 transition-all duration-200 hover:text-volt-300" onClick={() => openClientsWithFilter("Active")}>
                     + {alerts.length - 6} more in the clients list
                   </button>
                 </li>
@@ -265,7 +265,7 @@ export function Dashboard({
         </section>
 
         {/* today's schedule */}
-        <section className="rise flex h-full flex-col rounded-xl border border-night-700 bg-night-850 lg:col-span-5" style={{ animationDelay: "170ms" }}>
+        <section className="rise flex h-full flex-col rounded-2xl border border-night-700 bg-night-850 lg:col-span-5" style={{ animationDelay: "170ms" }}>
           <header className="flex items-center gap-2.5 border-b border-night-700 px-5 py-3.5">
             <Clock className="h-4 w-4 text-volt-400" />
             <h2 className="font-display text-base font-semibold uppercase tracking-wide text-mist-100">Today's schedule</h2>
@@ -317,7 +317,7 @@ export function Dashboard({
       </div>
 
       {/* recent activity */}
-      <section className="rise mt-5 rounded-xl border border-night-700 bg-night-850" style={{ animationDelay: "220ms" }}>
+      <section className="rise mt-5 rounded-2xl border border-night-700 bg-night-850" style={{ animationDelay: "220ms" }}>
         <header className="flex items-center gap-2.5 border-b border-night-700 px-5 py-3.5">
           <h2 className="font-display text-base font-semibold uppercase tracking-wide text-mist-100">Recent activity</h2>
           <span className="ms-auto text-[11px] font-semibold text-mist-500">check-ins · renewals · payments</span>
@@ -333,8 +333,8 @@ export function Dashboard({
           <ul className="grid gap-x-6 sm:grid-cols-2">
             {activity.map((ev, i) => (
               <li key={ev.key} className="rise border-b border-night-700/60 max-sm:last:border-b-0 sm:[&:nth-last-child(-n+2)]:border-b-0" style={{ animationDelay: `${250 + i * 40}ms` }}>
-                <button className="group flex w-full cursor-pointer items-center gap-3 px-5 py-3 text-start transition-colors hover:bg-night-800/60" onClick={() => go("client", ev.clientId)}>
-                  <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${ev.kind === "checkin" ? "bg-volt-400/10 text-volt-300" : ev.kind === "subscription" ? "bg-moss-400/10 text-moss-300" : "bg-warn-400/10 text-warn-300"}`}>
+                <button className="group flex w-full cursor-pointer items-center gap-3 px-5 py-3 text-start transition-all duration-200 hover:bg-night-800/60" onClick={() => go("client", ev.clientId)}>
+                  <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${ev.kind === "checkin" ? "bg-volt-400/10 text-volt-300" : ev.kind === "subscription" ? "bg-moss-400/10 text-moss-300" : "bg-warn-400/10 text-warn-300"}`}>
                     {ev.kind === "checkin" ? <Scale className="h-3.5 w-3.5" /> : ev.kind === "subscription" ? <BadgeCheck className="h-3.5 w-3.5" /> : <Wallet className="h-3.5 w-3.5" />}
                   </span>
                   <span className="min-w-0 flex-1">
@@ -446,7 +446,7 @@ function ScheduleRow({ s, delay, go }: { s: Session; delay: number; go: (v: Coac
       </span>
       <span className="w-16 shrink-0 font-display text-lg font-bold leading-5 text-mist-100 tnum">{fmtTime(s.time)}</span>
       <button className="min-w-0 flex-1 cursor-pointer text-start" onClick={() => c && go("client", c.id)}>
-        <span className={`block truncate text-sm font-bold transition hover:text-volt-300 ${missed ? "text-mist-400 line-through decoration-night-500" : "text-mist-100"}`}>
+        <span className={`block truncate text-sm font-bold transition-all duration-200 hover:text-volt-300 ${missed ? "text-mist-400 line-through decoration-night-500" : "text-mist-100"}`}>
           {c?.name ?? "Former client"}
         </span>
         <span className="block truncate text-[11px] font-semibold text-mist-500">{s.type}</span>
@@ -487,7 +487,7 @@ function ProgressPanel({ checkIns, clients, go }: { checkIns: CheckIn[]; clients
   const line = points.map((p, i) => `${x(i).toFixed(1)},${y(p.weight).toFixed(1)}`).join(" L");
 
   return (
-    <section className="rise flex h-full flex-col rounded-xl border border-night-700 bg-night-850 lg:col-span-7" style={{ animationDelay: "260ms" }}>
+    <section className="rise flex h-full flex-col rounded-2xl border border-night-700 bg-night-850 lg:col-span-7" style={{ animationDelay: "260ms" }}>
       <header className="flex flex-wrap items-center gap-2 border-b border-night-700 px-5 py-3.5">
         <h2 className="font-display text-base font-semibold uppercase tracking-wide text-mist-100">Client progress</h2>
         <span className="text-[11px] font-semibold text-mist-500">weight over time</span>
@@ -577,7 +577,7 @@ function ProgressPanel({ checkIns, clients, go }: { checkIns: CheckIn[]; clients
             </svg>
             {hover !== null && points[hover] && (
               <div
-                className="animate-pop pointer-events-none absolute -top-1 z-10 rounded-lg border border-night-600 bg-night-800 px-2.5 py-1.5 shadow-xl"
+                className="animate-pop pointer-events-none absolute -top-1 z-10 rounded-xl border border-night-600 bg-night-800 px-2.5 py-1.5 shadow-xl"
                 style={{ left: `${(x(hover) / W) * 100}%`, transform: `translateX(${hover > points.length / 2 ? "-108%" : "8%"})` }}
               >
                 <p className="font-display text-base font-bold leading-5 text-volt-300 tnum">{points[hover].weight} kg</p>
@@ -633,7 +633,7 @@ function BusinessPanel({
   const diff = revenueMonth - revenuePrev;
 
   return (
-    <section className="rise flex h-full flex-col rounded-xl border border-night-700 bg-night-850 lg:col-span-5" style={{ animationDelay: "300ms" }}>
+    <section className="rise flex h-full flex-col rounded-2xl border border-night-700 bg-night-850 lg:col-span-5" style={{ animationDelay: "300ms" }}>
       <header className="flex items-center gap-2.5 border-b border-night-700 px-5 py-3.5">
         <Wallet className="h-4 w-4 text-volt-400" />
         <h2 className="font-display text-base font-semibold uppercase tracking-wide text-mist-100">Business health</h2>
@@ -657,7 +657,7 @@ function BusinessPanel({
             </p>
           </div>
           {revenuePrev > 0 ? (
-            <span className={`mb-1 inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-bold tnum ${diff >= 0 ? "bg-moss-400/10 text-moss-300" : "bg-danger-500/10 text-danger-300"}`}>
+            <span className={`mb-1 inline-flex items-center gap-1 rounded-xl px-2 py-1 text-[11px] font-bold tnum ${diff >= 0 ? "bg-moss-400/10 text-moss-300" : "bg-danger-500/10 text-danger-300"}`}>
               {diff >= 0 ? "+" : ""}
               {fmtMoney(diff)} EGP vs last month
             </span>
@@ -701,7 +701,7 @@ function SubCount({
   return (
     <button
       onClick={() => openClients(filter)}
-      className="group cursor-pointer rounded-lg border border-night-700 bg-night-800/60 px-3 py-2.5 text-start transition hover:border-night-500 hover:bg-night-800"
+      className="group cursor-pointer rounded-xl border border-night-700 bg-night-800/60 px-3 py-2.5 text-start transition-all duration-200 hover:border-night-500 hover:bg-night-800"
       title={`Open clients — ${label.toLowerCase()}`}
     >
       <span className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-mist-500`}>
@@ -721,7 +721,7 @@ function DashboardSkeleton() {
         <Skeleton className="mt-3 h-11 w-80 max-w-full" />
         <Skeleton className="mt-2.5 h-3.5 w-64 max-w-full" />
       </div>
-      <div className="mt-7 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-night-700 bg-night-700 lg:grid-cols-5">
+      <div className="mt-7 grid grid-cols-2 gap-px overflow-hidden rounded-3xl border border-night-700 bg-night-700 lg:grid-cols-5">
         {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="bg-night-850 p-4">
             <Skeleton className="h-3 w-20" />
@@ -731,7 +731,7 @@ function DashboardSkeleton() {
         ))}
       </div>
       <div className="mt-5 grid gap-5 lg:grid-cols-12">
-        <div className="rounded-xl border border-night-700 bg-night-850 p-5 lg:col-span-7">
+        <div className="rounded-2xl border border-night-700 bg-night-850 p-5 lg:col-span-7">
           <Skeleton className="h-4 w-36" />
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="mt-4 flex items-center gap-3">
@@ -744,7 +744,7 @@ function DashboardSkeleton() {
             </div>
           ))}
         </div>
-        <div className="rounded-xl border border-night-700 bg-night-850 p-5 lg:col-span-5">
+        <div className="rounded-2xl border border-night-700 bg-night-850 p-5 lg:col-span-5">
           <Skeleton className="h-4 w-32" />
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="mt-4 flex items-center gap-3">
@@ -755,7 +755,7 @@ function DashboardSkeleton() {
           ))}
         </div>
       </div>
-      <div className="mt-5 rounded-xl border border-night-700 bg-night-850 p-5">
+      <div className="mt-5 rounded-2xl border border-night-700 bg-night-850 p-5">
         <Skeleton className="h-4 w-32" />
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {Array.from({ length: 4 }).map((_, i) => (

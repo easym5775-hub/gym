@@ -166,7 +166,7 @@ export function ClientsView({
         </div>
       </div>
 
-      <div className="rise mt-4 overflow-hidden rounded-xl border border-night-700 bg-night-850" style={{ animationDelay: "140ms" }}>
+      <div className="rise mt-4 overflow-hidden rounded-2xl border border-night-700 bg-night-850" style={{ animationDelay: "140ms" }}>
         {filtered.length === 0 ? (
           <div className="p-5">
             <EmptyState
@@ -248,17 +248,17 @@ export function ClientsView({
                     </td>
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1 opacity-60 transition group-hover:opacity-100">
-                        <button className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-mist-400 transition hover:bg-night-700 hover:text-volt-300" title="Open profile" onClick={() => go("client", c.id)}>
+                        <button className="grid h-8 w-8 cursor-pointer place-items-center rounded-xl text-mist-400 transition-all duration-200 hover:bg-night-700 hover:text-volt-300" title="Open profile" onClick={() => go("client", c.id)}>
                           <User className="h-4 w-4" />
                         </button>
-                        <button className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-mist-400 transition hover:bg-night-700 hover:text-volt-300" title="Workout plan" onClick={() => go("plans", c.id)}>
+                        <button className="grid h-8 w-8 cursor-pointer place-items-center rounded-xl text-mist-400 transition-all duration-200 hover:bg-night-700 hover:text-volt-300" title="Workout plan" onClick={() => go("plans", c.id)}>
                           <ClipboardList className="h-4 w-4" />
                         </button>
-                        <button className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-mist-400 transition hover:bg-night-700 hover:text-volt-300" title="Meals" onClick={() => go("meals", c.id)}>
+                        <button className="grid h-8 w-8 cursor-pointer place-items-center rounded-xl text-mist-400 transition-all duration-200 hover:bg-night-700 hover:text-volt-300" title="Meals" onClick={() => go("meals", c.id)}>
                           <UtensilsCrossed className="h-4 w-4" />
                         </button>
                         <button
-                          className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-mist-400 transition hover:bg-night-700 hover:text-mist-100"
+                          className="grid h-8 w-8 cursor-pointer place-items-center rounded-xl text-mist-400 transition-all duration-200 hover:bg-night-700 hover:text-mist-100"
                           title="Edit"
                           onClick={() => {
                             setEditing(c);
@@ -267,7 +267,7 @@ export function ClientsView({
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
-                        <button className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-mist-400 transition hover:bg-danger-500/15 hover:text-danger-300" title="Delete" onClick={() => setDeleting(c)}>
+                        <button className="grid h-8 w-8 cursor-pointer place-items-center rounded-xl text-mist-400 transition hover:bg-danger-500/15 hover:text-danger-300" title="Delete" onClick={() => setDeleting(c)}>
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
@@ -336,7 +336,7 @@ export function ClientProfile({ clientId, go }: { clientId: string; go: (v: Coac
         <button className="mb-4 inline-flex cursor-pointer items-center gap-1.5 text-xs font-bold text-mist-400 transition hover:text-volt-300" onClick={() => go("clients")}>
           <ArrowLeft className="h-3.5 w-3.5 rtl:rotate-180" /> Back to clients
         </button>
-        <div className="relative overflow-hidden rounded-xl border border-night-700 bg-night-850 p-5 sm:p-6">
+        <div className="relative overflow-hidden rounded-2xl border border-night-700 bg-night-850 p-5 sm:p-6">
           <div className="pointer-events-none absolute inset-0 opacity-[0.35]" style={{ backgroundImage: "repeating-linear-gradient(-45deg, transparent 0 14px, rgba(205,241,75,0.04) 14px 15px)" }} />
           <div className="relative flex flex-wrap items-center gap-4">
             <span className="relative">
@@ -363,7 +363,7 @@ export function ClientProfile({ clientId, go }: { clientId: string; go: (v: Coac
                   <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
                 </a>
               ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-lg border border-night-600 bg-night-800 px-3 py-1.5 text-xs font-semibold text-mist-500" title="No phone number available">
+                <span className="inline-flex items-center gap-1.5 rounded-xl border border-night-600 bg-night-800 px-3 py-1.5 text-xs font-semibold text-mist-500" title="No phone number available">
                   <Phone className="h-3.5 w-3.5" /> No phone number
                 </span>
               )}
@@ -534,7 +534,7 @@ function CheckInsCard({ checkIns, clientId }: { checkIns: CheckIn[]; clientId: s
                 <KV k="Weight" v={`${latest.weight} kg`} />
                 <KV k="Waist" v={latest.waist !== undefined ? `${latest.waist} cm` : "—"} />
                 <KV k="Water" v={`${latest.water} L`} />
-                <div className="rounded-lg border border-night-700 bg-night-800 p-3">
+                <div className="rounded-xl border border-night-700 bg-night-800 p-3">
                   <p className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-mist-500">Mood</p>
                   <div className="mt-2"><MoodDots mood={latest.mood} /></div>
                 </div>
@@ -542,7 +542,7 @@ function CheckInsCard({ checkIns, clientId }: { checkIns: CheckIn[]; clientId: s
               {latest.notes && <p className="mt-3 text-xs italic text-mist-400">"{latest.notes}"</p>}
               {latest.photo && (
                 <button className="mt-3 cursor-zoom-in" onClick={() => setPhoto(latest.photo ?? null)}>
-                  <img src={latest.photo} alt="Progress" className="h-20 rounded-lg object-cover ring-1 ring-night-600 transition hover:ring-volt-400" />
+                  <img src={latest.photo} alt="Progress" className="h-20 rounded-xl object-cover ring-1 ring-night-600 transition-all duration-200 hover:ring-volt-400" />
                 </button>
               )}
             </div>
@@ -551,7 +551,7 @@ function CheckInsCard({ checkIns, clientId }: { checkIns: CheckIn[]; clientId: s
             <ul className="mt-4 grid gap-1.5">
               {sorted.slice(1, 6).map((ci) => (
                 <li key={ci.id}>
-                  <button className="group flex w-full cursor-pointer items-center gap-3 rounded-lg border border-night-700 bg-night-800 px-3.5 py-2.5 text-start transition hover:border-night-500" onClick={() => setDetail(ci)}>
+                  <button className="group flex w-full cursor-pointer items-center gap-3 rounded-xl border border-night-700 bg-night-800 px-3.5 py-2.5 text-start transition-all duration-200 hover:border-night-500" onClick={() => setDetail(ci)}>
                     <span className="w-24 shrink-0 text-xs font-bold text-mist-300">{relDay(ci.date)}</span>
                     <span className="text-xs text-mist-400 tnum">{ci.weight} kg{ci.waist !== undefined ? ` · ${ci.waist} cm` : ""}</span>
                     <MoodDots mood={ci.mood} />
@@ -570,17 +570,17 @@ function CheckInsCard({ checkIns, clientId }: { checkIns: CheckIn[]; clientId: s
             <KV k="Weight" v={`${detail.weight} kg`} />
             <KV k="Waist" v={detail.waist !== undefined ? `${detail.waist} cm` : "—"} />
             <KV k="Water" v={`${detail.water} L`} />
-            <div className="rounded-lg border border-night-700 bg-night-800 p-3">
+            <div className="rounded-xl border border-night-700 bg-night-800 p-3">
               <p className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-mist-500">Mood</p>
               <div className="mt-2"><MoodDots mood={detail.mood} /></div>
             </div>
-            <div className="rounded-lg border border-night-700 bg-night-800 p-3">
+            <div className="rounded-xl border border-night-700 bg-night-800 p-3">
               <p className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-mist-500">Workout</p>
               <p className={`mt-1 font-display text-lg font-bold ${detail.workoutDone ? "text-moss-300" : "text-danger-300"}`}>{detail.workoutDone ? "Done" : "Skipped"}</p>
             </div>
           </div>
           {detail.notes && (
-            <div className="mt-3 rounded-lg border border-night-700 bg-night-800 p-3">
+            <div className="mt-3 rounded-xl border border-night-700 bg-night-800 p-3">
               <p className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-mist-500">Client notes</p>
               <p className="mt-1.5 text-sm leading-6 text-mist-200">"{detail.notes}"</p>
             </div>
@@ -589,7 +589,7 @@ function CheckInsCard({ checkIns, clientId }: { checkIns: CheckIn[]; clientId: s
             <div className="mt-3">
               <p className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-mist-500">Progress photo</p>
               <button className="mt-1.5 cursor-zoom-in" onClick={() => setPhoto(detail.photo ?? null)}>
-                <img src={detail.photo} alt="Progress" className="h-32 rounded-lg object-cover ring-1 ring-night-600 transition hover:ring-volt-400" />
+                <img src={detail.photo} alt="Progress" className="h-32 rounded-xl object-cover ring-1 ring-night-600 transition-all duration-200 hover:ring-volt-400" />
               </button>
             </div>
           )}
@@ -634,7 +634,7 @@ function SessionsCard({ sessions, clientId }: { sessions: Session[]; clientId: s
         </button>
       }
     >
-      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-night-700 bg-night-800/60 px-4 py-3">
+      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-night-700 bg-night-800/60 px-4 py-3">
         <p className="text-xs font-bold text-mist-300">
           Attendance: <span className="font-display text-lg text-volt-300 tnum">{att.completed}/{att.countable}</span>
         </p>
@@ -651,7 +651,7 @@ function SessionsCard({ sessions, clientId }: { sessions: Session[]; clientId: s
           {sorted.map((s) => {
             const meta = SESSION_STATUS_META[s.status];
             return (
-              <li key={s.id} className="group flex items-center gap-3 rounded-lg border border-night-700 bg-night-800 px-3.5 py-2.5 transition hover:border-night-500">
+              <li key={s.id} className="group flex items-center gap-3 rounded-xl border border-night-700 bg-night-800 px-3.5 py-2.5 transition-all duration-200 hover:border-night-500">
                 <span className="w-24 shrink-0 text-xs font-bold text-mist-300">{relDay(s.date)}</span>
                 <span className="w-20 shrink-0 font-display text-base font-bold text-mist-100 tnum">{fmtTime(s.time)}</span>
                 <span className="min-w-0 flex-1 truncate text-xs text-mist-400">{s.type}</span>
@@ -721,7 +721,7 @@ function PaymentsCard({ payments, subs, clientId, sub }: { payments: Payment[]; 
           {sorted.map((p) => {
             const linked = subs.find((s) => s.id === p.subscriptionId);
             return (
-              <li key={p.id} className="group flex items-center gap-3 rounded-lg border border-night-700 bg-night-800 px-3.5 py-2.5 transition hover:border-night-500">
+              <li key={p.id} className="group flex items-center gap-3 rounded-xl border border-night-700 bg-night-800 px-3.5 py-2.5 transition-all duration-200 hover:border-night-500">
                 <span className="w-24 shrink-0 text-xs font-bold text-mist-300">{relDay(p.date)}</span>
                 <span className="font-display text-lg font-bold text-mist-100 tnum">{fmtMoney(p.amount)} <span className="text-xs font-semibold text-mist-500">EGP</span></span>
                 <span className="min-w-0 flex-1 truncate text-xs text-mist-400">{p.method}{linked ? ` · ${linked.planName}` : ""}</span>
@@ -945,11 +945,11 @@ function CoachNotesCard({ client }: { client: Client }) {
         </button>
       </div>
       {notes.length === 0 ? (
-        <p className="mt-4 rounded-lg border border-dashed border-night-600 px-4 py-5 text-center text-xs text-mist-500">No notes yet.</p>
+        <p className="mt-4 rounded-xl border border-dashed border-night-600 px-4 py-5 text-center text-xs text-mist-500">No notes yet.</p>
       ) : (
         <ul className="mt-4 grid gap-2">
           {notes.map((n) => (
-            <li key={n.id} className="group rounded-lg border border-night-700 bg-night-800 p-3">
+            <li key={n.id} className="group rounded-xl border border-night-700 bg-night-800 p-3">
               {editingId === n.id ? (
                 <div className="flex gap-2">
                   <input className={`${inputCls} h-9 min-w-0 flex-1`} value={editText} onChange={(e) => setEditText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { updateCoachNote(client.id, n.id, editText.trim()); setEditingId(null); } }} autoFocus />
@@ -963,7 +963,7 @@ function CoachNotesCard({ client }: { client: Client }) {
                   <div className="mt-1.5 flex items-center gap-2">
                     <span className="text-[10px] font-bold text-mist-500">{relTime(n.createdAt)}</span>
                     <span className="ms-auto flex gap-1 opacity-0 transition group-hover:opacity-100">
-                      <button className="grid h-6 w-6 cursor-pointer place-items-center rounded-md text-mist-400 transition hover:bg-night-700 hover:text-mist-100" title="Edit" onClick={() => { setEditingId(n.id); setEditText(n.text); }}>
+                      <button className="grid h-6 w-6 cursor-pointer place-items-center rounded-md text-mist-400 transition-all duration-200 hover:bg-night-700 hover:text-mist-100" title="Edit" onClick={() => { setEditingId(n.id); setEditText(n.text); }}>
                         <Pencil className="h-3 w-3" />
                       </button>
                       <button className="grid h-6 w-6 cursor-pointer place-items-center rounded-md text-mist-400 transition hover:bg-danger-500/15 hover:text-danger-300" title="Delete" onClick={() => setDeleting(n.id)}>
@@ -1030,7 +1030,7 @@ function InfoRow({ k, v }: { k: string; v: string }) {
 
 function KV({ k, v, tone }: { k: string; v: string; tone?: string }) {
   return (
-    <div className="rounded-lg border border-night-700 bg-night-800 p-3">
+    <div className="rounded-xl border border-night-700 bg-night-800 p-3">
       <p className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-mist-500">{k}</p>
       <p className={`mt-1 font-display text-lg font-bold tnum ${tone ?? "text-mist-100"}`}>{v}</p>
     </div>

@@ -64,14 +64,14 @@ function PhotoField({
       <span className={labelCls}>{label}</span>
       <div className="flex items-center gap-3">
         {value ? (
-          <img src={value} alt="Preview" className="h-16 w-16 rounded-lg object-cover ring-1 ring-night-600" />
+          <img src={value} alt="Preview" className="h-16 w-16 rounded-xl object-cover ring-1 ring-night-600" />
         ) : (
-          <span className="grid h-16 w-16 place-items-center rounded-lg border border-dashed border-night-500 text-night-400">
+          <span className="grid h-16 w-16 place-items-center rounded-xl border border-dashed border-night-500 text-night-400">
             <ImageIcon className="h-6 w-6" />
           </span>
         )}
         <div className="flex flex-col items-start gap-1.5">
-          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-night-600 bg-night-800 px-3 py-1.5 text-xs font-bold text-mist-200 transition hover:border-night-500 hover:bg-night-700">
+          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-night-600 bg-night-800 px-3 py-1.5 text-xs font-bold text-mist-200 transition hover:border-night-500 hover:bg-night-700">
             {value ? "Replace" : "Upload"}
             <input type="file" accept="image/*" className="hidden" onChange={pick} />
           </label>
@@ -209,7 +209,7 @@ export function ClientFormModal({
                 <input className={inputCls} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="min 6 chars" autoComplete="new-password" />
                 <button
                   type="button"
-                  className="shrink-0 cursor-pointer rounded-lg border border-night-600 bg-night-800 px-3 text-mist-400 transition hover:border-volt-400 hover:text-volt-300"
+                  className="shrink-0 cursor-pointer rounded-xl border border-night-600 bg-night-800 px-3 text-mist-400 transition-all duration-200 hover:border-volt-400 hover:text-volt-300"
                   onClick={() => setPassword(randomPassword())}
                   title="Generate a random password"
                 >
@@ -267,7 +267,7 @@ export function ClientFormModal({
           <textarea className={textareaCls} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Injuries, preferences, schedule…" />
         </div>
       </div>
-      {error && <p className="mt-3 rounded-lg border border-danger-500/25 bg-danger-500/10 px-3 py-2 text-xs font-bold text-danger-300">{error}</p>}
+      {error && <p className="mt-3 rounded-xl border border-danger-500/25 bg-danger-500/10 px-3 py-2 text-xs font-bold text-danger-300">{error}</p>}
       <div className="mt-5 flex gap-2">
         <button className={`${btnPrimary} flex-1`} onClick={() => void save()} disabled={busy}>
           {busy ? "Saving…" : initial ? "Save changes" : "Create client"}
@@ -394,7 +394,7 @@ export function PlanItemFormModal({
   return (
     <Modal open={open} onClose={onClose} title={`${initial ? "Edit" : "Add"} exercise — Day ${day} (${WEEK_DAYS[day - 1]})`}>
       {state.exercises.length === 0 ? (
-        <p className="rounded-lg border border-warn-400/25 bg-warn-400/10 p-3 text-sm text-warn-300">The library is empty — add an exercise there first.</p>
+        <p className="rounded-xl border border-warn-400/25 bg-warn-400/10 p-3 text-sm text-warn-300">The library is empty — add an exercise there first.</p>
       ) : (
         <div className="grid gap-4">
           <div>
@@ -407,7 +407,7 @@ export function PlanItemFormModal({
               ))}
             </select>
             {picked && picked.description && (
-              <p className="mt-2 rounded-lg bg-night-800 p-2.5 text-xs leading-5 text-mist-400">{picked.description}</p>
+              <p className="mt-2 rounded-xl bg-night-800 p-2.5 text-xs leading-5 text-mist-400">{picked.description}</p>
             )}
           </div>
           <div className="grid grid-cols-3 gap-3">
@@ -503,7 +503,7 @@ export function MealFormModal({
                 key={t}
                 type="button"
                 onClick={() => setType(t)}
-                className={`cursor-pointer rounded-lg border px-1 py-2 text-[11px] font-bold transition ${
+                className={`cursor-pointer rounded-xl border px-1 py-2 text-[11px] font-bold transition ${
                   type === t ? "border-volt-400 bg-volt-400/15 text-volt-300" : "border-night-600 bg-night-800 text-mist-400 hover:border-night-500"
                 }`}
               >
@@ -948,7 +948,7 @@ export function ResetPasswordModal({ open, clientId, onClose }: { open: boolean;
         <input className={inputCls} value={pw} onChange={(e) => setPw(e.target.value)} placeholder="New password (min 6 chars)" autoComplete="new-password" />
         <button
           type="button"
-          className="shrink-0 cursor-pointer rounded-lg border border-night-600 bg-night-800 px-3 text-mist-400 transition hover:border-volt-400 hover:text-volt-300"
+          className="shrink-0 cursor-pointer rounded-xl border border-night-600 bg-night-800 px-3 text-mist-400 transition-all duration-200 hover:border-volt-400 hover:text-volt-300"
           onClick={() => setPw(randomPassword())}
           title="Generate a random password"
         >

@@ -14,7 +14,7 @@ export function WeightLine({ entries }: { entries: CheckIn[] }) {
 
   if (sorted.length < 2) {
     return (
-      <div className="grid h-44 place-items-center rounded-lg border border-night-700 bg-night-800/50 px-6 text-center text-xs text-mist-500">
+      <div className="grid h-44 place-items-center rounded-xl border border-night-700 bg-night-800/50 px-6 text-center text-xs text-mist-500">
         Log at least two check-ins to draw your trend.
       </div>
     );
@@ -133,15 +133,15 @@ export function MacroSplit({ protein, carbs, fats }: { protein: number; carbs: n
   const c = (carbs / total) * 100;
   return (
     <div>
-      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-night-700">
+      <div className="flex h-2.5 w-full overflow-hidden rounded-2xl bg-night-700">
         <div className="grow-x h-full bg-volt-400" style={{ width: `${p}%` }} />
         <div className="grow-x h-full bg-sky-400" style={{ width: `${c}%`, animationDelay: "120ms" }} />
         <div className="grow-x h-full bg-warn-400" style={{ width: `${100 - p - c}%`, animationDelay: "240ms" }} />
       </div>
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-bold">
-        <span className="flex items-center gap-1.5 text-volt-300"><span className="h-1.5 w-1.5 rounded-full bg-volt-400" />Protein {protein}g</span>
-        <span className="flex items-center gap-1.5 text-sky-300"><span className="h-1.5 w-1.5 rounded-full bg-sky-400" />Carbs {carbs}g</span>
-        <span className="flex items-center gap-1.5 text-warn-300"><span className="h-1.5 w-1.5 rounded-full bg-warn-400" />Fats {fats}g</span>
+        <span className="flex items-center gap-1.5 text-volt-300"><span className="h-1.5 w-1.5 rounded-2xl bg-volt-400" />Protein {protein}g</span>
+        <span className="flex items-center gap-1.5 text-sky-300"><span className="h-1.5 w-1.5 rounded-2xl bg-sky-400" />Carbs {carbs}g</span>
+        <span className="flex items-center gap-1.5 text-warn-300"><span className="h-1.5 w-1.5 rounded-2xl bg-warn-400" />Fats {fats}g</span>
       </div>
     </div>
   );
