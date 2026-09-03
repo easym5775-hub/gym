@@ -102,7 +102,7 @@ export function PlansView({ presetClientId }: { presetClientId: string | null })
                 <button
                   key={wd}
                   onClick={() => setDay(d)}
-                  className={`cursor-pointer rounded-lg border px-1 py-2.5 text-center transition ${active ? "border-volt-400 bg-volt-400/10" : "border-night-600 bg-night-850 hover:border-night-500"}`}
+                  className={`cursor-pointer rounded-xl border px-1 py-2.5 text-center transition ${active ? "border-volt-400 bg-volt-400/10" : "border-night-600 bg-night-850 hover:border-night-500"}`}
                 >
                   <span className={`block font-display text-lg font-bold leading-5 ${active ? "text-volt-300" : "text-mist-100"}`}>Day {d}</span>
                   <span className={`block text-[10px] font-bold uppercase ${active ? "text-volt-400/80" : "text-mist-500"}`}>
@@ -144,8 +144,8 @@ export function PlansView({ presetClientId }: { presetClientId: string | null })
                 {items.map((item, idx) => {
                   const ex = exOf(item.exerciseId);
                   return (
-                    <li key={item.id} className="rise group flex items-center gap-3 rounded-lg border border-night-700 bg-night-800 p-3 transition hover:border-night-500" style={{ animationDelay: `${idx * 50}ms` }}>
-                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-night-700 font-display text-lg font-bold text-volt-300">{idx + 1}</span>
+                    <li key={item.id} className="rise group flex items-center gap-3 rounded-xl border border-night-700 bg-night-800 p-3 transition-all duration-200 hover:border-night-500" style={{ animationDelay: `${idx * 50}ms` }}>
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-night-700 font-display text-lg font-bold text-volt-300">{idx + 1}</span>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="truncate font-bold text-mist-100">{ex?.name ?? "Removed exercise"}</p>
@@ -166,14 +166,14 @@ export function PlansView({ presetClientId }: { presetClientId: string | null })
                       </div>
                       <div className="flex shrink-0 items-center gap-1 opacity-60 transition group-hover:opacity-100">
                         {ex?.videoUrl && (
-                          <a href={ex.videoUrl} target="_blank" rel="noreferrer" className="grid h-8 w-8 place-items-center rounded-lg text-mist-400 transition hover:bg-night-700 hover:text-volt-300" title="Watch video">
+                          <a href={ex.videoUrl} target="_blank" rel="noreferrer" className="grid h-8 w-8 place-items-center rounded-xl text-mist-400 transition-all duration-200 hover:bg-night-700 hover:text-volt-300" title="Watch video">
                             <Play className="h-3.5 w-3.5" />
                           </a>
                         )}
-                        <button className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-mist-400 transition hover:bg-night-700 hover:text-mist-100" title="Edit" onClick={() => { setEditing(item); setModalOpen(true); }}>
+                        <button className="grid h-8 w-8 cursor-pointer place-items-center rounded-xl text-mist-400 transition-all duration-200 hover:bg-night-700 hover:text-mist-100" title="Edit" onClick={() => { setEditing(item); setModalOpen(true); }}>
                           <Pencil className="h-4 w-4" />
                         </button>
-                        <button className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-mist-400 transition hover:bg-danger-500/15 hover:text-danger-300" title="Remove" onClick={() => setDeleting(item)}>
+                        <button className="grid h-8 w-8 cursor-pointer place-items-center rounded-xl text-mist-400 transition hover:bg-danger-500/15 hover:text-danger-300" title="Remove" onClick={() => setDeleting(item)}>
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
@@ -252,10 +252,10 @@ export function MealsView({ presetClientId }: { presetClientId: string | null })
       ) : (
         <>
           {/* targets */}
-          <div className="rise mt-6 rounded-xl border border-night-700 bg-night-850 p-5" style={{ animationDelay: "80ms" }}>
+          <div className="rise mt-6 rounded-2xl border border-night-700 bg-night-850 p-5" style={{ animationDelay: "80ms" }}>
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <span className="grid h-12 w-12 place-items-center rounded-lg bg-warn-400/10 text-warn-300">
+                <span className="grid h-12 w-12 place-items-center rounded-xl bg-warn-400/10 text-warn-300">
                   <Target className="h-6 w-6" />
                 </span>
                 <div>
@@ -327,7 +327,7 @@ export function MealsView({ presetClientId }: { presetClientId: string | null })
                     bodyCls="p-3"
                     action={
                       <button
-                        className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg border border-night-600 text-mist-400 transition hover:border-volt-400 hover:text-volt-300"
+                        className="grid h-8 w-8 cursor-pointer place-items-center rounded-xl border border-night-600 text-mist-400 transition hover:border-volt-400 hover:text-volt-300"
                         title={`Add ${mt.toLowerCase()}`}
                         onClick={() => { setEditing(null); setDefaultType(mt); setModalOpen(true); }}
                       >
@@ -336,15 +336,15 @@ export function MealsView({ presetClientId }: { presetClientId: string | null })
                     }
                   >
                     {list.length === 0 ? (
-                      <p className="rounded-lg border border-dashed border-night-600 px-4 py-5 text-center text-xs text-mist-500">No {mt.toLowerCase()} assigned</p>
+                      <p className="rounded-xl border border-dashed border-night-600 px-4 py-5 text-center text-xs text-mist-500">No {mt.toLowerCase()} assigned</p>
                     ) : (
                       <ul className="grid gap-2">
                         {list.map((m) => (
-                          <li key={m.id} className="group rounded-lg border border-night-700 bg-night-800 p-3 transition hover:border-night-500">
+                          <li key={m.id} className="group rounded-xl border border-night-700 bg-night-800 p-3 transition-all duration-200 hover:border-night-500">
                             <div className="flex items-start gap-2">
                               <Badge className={MEAL_META[m.type].chip}>{m.type}</Badge>
                               <div className="ms-auto flex gap-1 opacity-60 transition group-hover:opacity-100">
-                                <button className="grid h-7 w-7 cursor-pointer place-items-center rounded-md text-mist-400 transition hover:bg-night-700 hover:text-mist-100" title="Edit" onClick={() => { setEditing(m); setModalOpen(true); }}>
+                                <button className="grid h-7 w-7 cursor-pointer place-items-center rounded-md text-mist-400 transition-all duration-200 hover:bg-night-700 hover:text-mist-100" title="Edit" onClick={() => { setEditing(m); setModalOpen(true); }}>
                                   <Pencil className="h-3.5 w-3.5" />
                                 </button>
                                 <button className="grid h-7 w-7 cursor-pointer place-items-center rounded-md text-mist-400 transition hover:bg-danger-500/15 hover:text-danger-300" title="Delete" onClick={() => setDeleting(m)}>
@@ -456,14 +456,14 @@ export function LibraryView() {
       ) : (
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((ex, i) => (
-            <div key={ex.id} className="rise card-lift group rounded-xl border border-night-700 bg-night-850 p-4" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
+            <div key={ex.id} className="rise card-lift group rounded-2xl border border-night-700 bg-night-850 p-4" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
               <div className="flex items-start justify-between gap-2">
                 <Badge className={CAT_META[ex.category].chip}>
                   <span className={`h-1.5 w-1.5 rounded-full ${CAT_META[ex.category].dot}`} />
                   {ex.category}
                 </Badge>
                 <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
-                  <button className="grid h-7 w-7 cursor-pointer place-items-center rounded-md text-mist-400 transition hover:bg-night-700 hover:text-mist-100" title="Edit" onClick={() => { setEditing(ex); setModalOpen(true); }}>
+                  <button className="grid h-7 w-7 cursor-pointer place-items-center rounded-md text-mist-400 transition-all duration-200 hover:bg-night-700 hover:text-mist-100" title="Edit" onClick={() => { setEditing(ex); setModalOpen(true); }}>
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
                   <button className="grid h-7 w-7 cursor-pointer place-items-center rounded-md text-mist-400 transition hover:bg-danger-500/15 hover:text-danger-300" title="Delete" onClick={() => setDeleting(ex)}>
@@ -476,7 +476,7 @@ export function LibraryView() {
               <div className="mt-3 flex items-center justify-between">
                 <span className="text-[11px] font-semibold text-mist-500 tnum">used in {usedIn(ex.id)} plan item{usedIn(ex.id) === 1 ? "" : "s"}</span>
                 {ex.videoUrl && (
-                  <a href={ex.videoUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-night-700 px-2.5 py-1.5 text-[11px] font-bold text-volt-300 transition hover:bg-night-600">
+                  <a href={ex.videoUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-xl bg-night-700 px-2.5 py-1.5 text-[11px] font-bold text-volt-300 transition hover:bg-night-600">
                     <Play className="h-3 w-3" /> Video
                   </a>
                 )}
@@ -564,11 +564,11 @@ export function CheckInsView({ go }: { go?: (v: CoachView, id?: string) => void 
               const c = nameOf(ci.clientId);
               const delta = deltaFor(ci.clientId, ci.id, ci.weight);
               return (
-                <li key={ci.id} className="rise group flex items-center gap-3 rounded-lg border border-night-700 bg-night-800 p-3 transition hover:border-night-500" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
+                <li key={ci.id} className="rise group flex items-center gap-3 rounded-xl border border-night-700 bg-night-800 p-3 transition-all duration-200 hover:border-night-500" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
                   <Avatar name={c?.name ?? "?"} photo={c?.photo} className="h-10 w-10 text-xs" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold text-mist-100">
-                      <button className="cursor-pointer transition hover:text-volt-300" onClick={() => go?.("client", ci.clientId)}>
+                      <button className="cursor-pointer transition-all duration-200 hover:text-volt-300" onClick={() => go?.("client", ci.clientId)}>
                         {c?.name ?? "Former client"}
                       </button>
                       <span className="ms-2 text-[11px] font-semibold text-mist-500">{relDay(ci.date)}</span>
@@ -586,7 +586,7 @@ export function CheckInsView({ go }: { go?: (v: CoachView, id?: string) => void 
                   </div>
                   {ci.photo && (
                     <button onClick={() => setPhoto(ci.photo ?? null)} className="shrink-0 cursor-zoom-in" aria-label="View photo">
-                      <img src={ci.photo} alt="" className="h-12 w-12 rounded-lg object-cover ring-1 ring-night-600 transition hover:ring-volt-400" />
+                      <img src={ci.photo} alt="" className="h-12 w-12 rounded-xl object-cover ring-1 ring-night-600 transition hover:ring-volt-400" />
                     </button>
                   )}
                   <Badge className={ci.workoutDone ? "border-moss-400/25 bg-moss-400/10 text-moss-300" : "border-danger-500/25 bg-danger-500/10 text-danger-300"}>
@@ -612,17 +612,17 @@ export function CheckInsView({ go }: { go?: (v: CoachView, id?: string) => void 
             <MiniStat label="Weight" value={`${detail.weight} kg`} />
             <MiniStat label="Waist" value={detail.waist !== undefined ? `${detail.waist} cm` : "—"} />
             <MiniStat label="Water" value={`${detail.water} L`} />
-            <div className="rounded-lg border border-night-700 bg-night-800 p-3">
+            <div className="rounded-xl border border-night-700 bg-night-800 p-3">
               <p className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-mist-500">Mood</p>
               <div className="mt-2"><MoodDots mood={detail.mood} /></div>
             </div>
-            <div className="rounded-lg border border-night-700 bg-night-800 p-3">
+            <div className="rounded-xl border border-night-700 bg-night-800 p-3">
               <p className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-mist-500">Workout</p>
               <p className={`mt-1 font-display text-lg font-bold ${detail.workoutDone ? "text-moss-300" : "text-danger-300"}`}>{detail.workoutDone ? "Completed" : "Skipped"}</p>
             </div>
           </div>
           {detail.notes && (
-            <div className="mt-3 rounded-lg border border-night-700 bg-night-800 p-3">
+            <div className="mt-3 rounded-xl border border-night-700 bg-night-800 p-3">
               <p className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-mist-500">Client notes</p>
               <p className="mt-1.5 text-sm leading-6 text-mist-200">"{detail.notes}"</p>
             </div>
@@ -631,7 +631,7 @@ export function CheckInsView({ go }: { go?: (v: CoachView, id?: string) => void 
             <div className="mt-3">
               <p className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-mist-500">Progress photo</p>
               <button className="mt-1.5 cursor-zoom-in" onClick={() => setPhoto(detail.photo ?? null)}>
-                <img src={detail.photo} alt="Progress" className="h-32 rounded-lg object-cover ring-1 ring-night-600 transition hover:ring-volt-400" />
+                <img src={detail.photo} alt="Progress" className="h-32 rounded-xl object-cover ring-1 ring-night-600 transition hover:ring-volt-400" />
               </button>
             </div>
           )}
@@ -652,7 +652,7 @@ export function CheckInsView({ go }: { go?: (v: CoachView, id?: string) => void 
 
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-night-700 bg-night-800 p-3">
+    <div className="rounded-xl border border-night-700 bg-night-800 p-3">
       <p className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-mist-500">{label}</p>
       <p className="mt-1 font-display text-lg font-bold text-mist-100 tnum">{value}</p>
     </div>

@@ -92,10 +92,10 @@ export function Auth() {
 
         {/* sign-in side */}
         <div className="rise w-full max-w-md flex-none lg:w-auto" style={{ animationDelay: "140ms" }}>
-          <div className="relative rounded-xl border border-night-600 bg-night-850/90 p-6 shadow-[0_30px_70px_-30px_rgba(0,0,0,0.9)] backdrop-blur">
-            <span className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-volt-400/50 to-transparent" />
+          <div className="relative overflow-hidden rounded-2xl border border-night-600 bg-night-850/90 p-6 shadow-[0_40px_80px_-40px_rgba(0,0,0,0.95)] backdrop-blur-md">
+            <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-volt-400/50 to-transparent" />
             <div className="mb-6 flex items-center gap-3 lg:hidden">
-              <span className="grid h-10 w-10 place-items-center rounded-lg bg-volt-400 text-night-950">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-volt-400 text-night-950 shadow-[0_8px_20px_-8px_rgba(205,241,75,0.5)]">
                 <Dumbbell className="h-5 w-5" strokeWidth={2.2} />
               </span>
               <div>
@@ -107,14 +107,14 @@ export function Auth() {
             <p className="font-display text-2xl font-semibold uppercase tracking-wide text-mist-100">Sign in to your space</p>
             <p className="mt-1 text-xs text-mist-400">Pick who is stepping onto the floor today.</p>
 
-            <div className="mt-5 grid grid-cols-2 gap-1.5 rounded-lg border border-night-600 bg-night-900 p-1.5">
+            <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl border border-night-600 bg-night-900 p-1.5">
               <button
                 onClick={() => {
                   setRole("coach");
                   setError("");
                 }}
-                className={`flex cursor-pointer items-center justify-center gap-2 rounded-md py-2.5 text-sm font-bold transition ${
-                  role === "coach" ? "bg-volt-400 text-night-950 shadow" : "text-mist-400 hover:text-mist-100"
+                className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-bold transition-all duration-200 ${
+                  role === "coach" ? "bg-volt-400 text-night-950 shadow-[0_4px_14px_-4px_rgba(205,241,75,0.4)]" : "text-mist-400 hover:bg-night-800 hover:text-mist-100"
                 }`}
               >
                 <Zap className="h-4 w-4" /> Coach
@@ -124,8 +124,8 @@ export function Auth() {
                   setRole("client");
                   setError("");
                 }}
-                className={`flex cursor-pointer items-center justify-center gap-2 rounded-md py-2.5 text-sm font-bold transition ${
-                  role === "client" ? "bg-volt-400 text-night-950 shadow" : "text-mist-400 hover:text-mist-100"
+                className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-bold transition-all duration-200 ${
+                  role === "client" ? "bg-volt-400 text-night-950 shadow-[0_4px_14px_-4px_rgba(205,241,75,0.4)]" : "text-mist-400 hover:bg-night-800 hover:text-mist-100"
                 }`}
               >
                 <Users className="h-4 w-4" /> Client
@@ -196,11 +196,11 @@ export function Auth() {
                 </>
               )}
 
-              {error && <p className="rounded-lg border border-danger-500/25 bg-danger-500/10 px-3 py-2 text-xs font-bold text-danger-300">{error}</p>}
+              {error && <p className="rounded-xl border border-danger-500/25 bg-danger-500/10 px-3 py-2 text-xs font-bold text-danger-300">{error}</p>}
             </div>
 
             {isDemoMode && (
-              <div className="mt-5 rounded-lg border border-volt-400/20 bg-volt-400/5 p-3 text-[11px] leading-5 text-mist-400">
+              <div className="mt-5 rounded-xl border border-volt-400/20 bg-volt-400/5 p-3 text-[11px] leading-5 text-mist-400">
                 <p className="font-display text-xs font-bold uppercase tracking-wider text-volt-300">Demo credentials</p>
                 <p className="mt-1">
                   Coach: <span className="font-bold text-mist-200">{DEMO_COACH_EMAIL}</span> / <span className="font-bold text-mist-200">{DEMO_PASSWORD}</span>
@@ -232,7 +232,7 @@ function RememberMe({ checked, onChange }: { checked: boolean; onChange: (v: boo
       className="group flex w-full cursor-pointer items-center gap-2.5 text-start"
     >
       <span
-        className={`grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[5px] border transition-all duration-150 ${
+        className={`grid h-[18px] w-[18px] shrink-0 place-items-center rounded-lg border transition-all duration-150 ${
           checked
             ? "border-volt-400 bg-volt-400 text-night-950 shadow-[0_0_14px_-2px_rgba(205,241,75,0.6)]"
             : "border-night-500 bg-night-800 text-transparent group-hover:border-mist-400"
@@ -250,7 +250,7 @@ function RememberMe({ checked, onChange }: { checked: boolean; onChange: (v: boo
 
 function RememberMeTicker() {
   return (
-    <div className="relative z-10 border-t border-night-700 bg-night-900/70 py-3 backdrop-blur">
+    <div className="relative z-10 border-t border-night-700 bg-night-900/70 py-3 backdrop-blur-md">
         <div className="overflow-hidden">
           <div className="ticker-track flex w-max items-center gap-8">
             {[...TICKER, ...TICKER].map((t, i) => (

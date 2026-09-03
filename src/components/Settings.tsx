@@ -46,7 +46,7 @@ export function SettingsView() {
 
         <SectionCard title="Security" icon={<KeyRound className="h-4.5 w-4.5" />} bodyCls="p-5">
           {isDemo ? (
-            <p className="rounded-lg border border-night-700 bg-night-800/60 px-3.5 py-3 text-xs leading-5 text-mist-400">
+            <p className="rounded-xl border border-night-700 bg-night-800/60 px-3.5 py-3 text-xs leading-5 text-mist-400">
               You're in <span className="font-bold text-volt-300">demo mode</span> — the coach password is fixed
               (<span className="font-bold text-mist-200">forge123</span>). Connect Supabase to manage real passwords via
               Supabase Auth.
@@ -82,11 +82,11 @@ export function SettingsView() {
               : "Data is stored in your Supabase project and scoped by Row Level Security — each account only ever sees its own rows."}
           </p>
           <div className="mt-4 grid grid-cols-2 gap-2 text-center">
-            <div className="rounded-lg border border-night-700 bg-night-800 p-3">
+            <div className="rounded-xl border border-night-700 bg-night-800 p-3">
               <p className="font-display text-2xl font-bold text-volt-300 tnum">{state.clients.length}</p>
               <p className="text-[10px] font-bold uppercase tracking-wider text-mist-500">clients</p>
             </div>
-            <div className="rounded-lg border border-night-700 bg-night-800 p-3">
+            <div className="rounded-xl border border-night-700 bg-night-800 p-3">
               <p className="font-display text-2xl font-bold text-volt-300 tnum">{state.checkIns.length}</p>
               <p className="text-[10px] font-bold uppercase tracking-wider text-mist-500">check-ins</p>
             </div>
