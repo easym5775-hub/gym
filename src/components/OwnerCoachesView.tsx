@@ -4,14 +4,13 @@
 
 import { useState, useMemo } from "react";
 import { useApp } from "../store";
-import { OwnerShell, OwnerPageHeader } from "./OwnerShell";
-import { signOut } from "../services/auth";
-import type { OwnerView } from "./OwnerShell";
+import { OwnerPageHeader } from "./OwnerShell";
+
 import { Search, Filter, MoreVertical, CheckCircle, XCircle, Clock, Shield, Users } from "lucide-react";
 import { Avatar, btnPrimary } from "./ui";
 
 export function OwnerCoachesView() {
-  const [view, setView] = useState<OwnerView>("coaches");
+  
   const { state, me } = useApp();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive" | "suspended">("all");
@@ -111,7 +110,7 @@ export function OwnerCoachesView() {
   };
 
   return (
-    <OwnerShell view={view} setView={setView} onLogout={() => void signOut()}>
+    <>
       <OwnerPageHeader
         title="Coaches"
         sub="Manage coach accounts and subscriptions"
@@ -230,6 +229,6 @@ export function OwnerCoachesView() {
           </div>
         </div>
       )}
-    </OwnerShell>
+    </>
   );
 }

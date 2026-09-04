@@ -74,8 +74,21 @@ function Root() {
     setCoachView(v);
   };
 
-  // Show admin auth screen
-  if (showAdminAuth) {
+  // If authenticated as owner, show Owner Mode directly (no AdminAuth screen)
+  if (phase === "ready" && me?.role === "owner") {
+    return (
+      <OwnerShell view={ownerView} setView={setOwnerView} onLogout={() => void signOut()}>
+        {ownerView === "dashboard" && <OwnerDashboard />}
+        {ownerView === "coaches" && <OwnerCoachesView />}
+        {ownerView === "subscriptions" && <OwnerSubscriptionsView />}
+        {ownerView === "analytics" && <OwnerAnalyticsView />}
+        {ownerView === "settings" && <OwnerSettingsView />}
+      </OwnerShell>
+    );
+  }
+
+  // Show admin auth screen only when explicitly requested AND not already authenticated
+  if (showAdminAuth && (!me || me.role !== "owner")) {
     return <AdminAuth onBack={() => setShowAdminAuth(false)} />;
   }
 
@@ -91,28 +104,7 @@ function Root() {
     return <ClientApp onLogout={() => void signOut()} />;
   }
 
-  if (me.role === "owner") {
-    return (
-      <OwnerShell view={ownerView} setView={setOwnerView} onLogout={() => void signOut()}>
-        {ownerView === "dashboard" && <OwnerDashboard />}
-        {ownerView === "coaches" && <OwnerCoachesView />}
-        {ownerView === "subscriptions" && <OwnerSubscriptionsView />}
-        {ownerView === "analytics" && (
-          <div className="rise">
-            <h2 className="font-display text-2xl font-bold uppercase text-mist-100">Analytics</h2>
-            <p className="mt-2 text-sm text-mist-400">Analytics view - coming soon</p>
-          </div>
-        )}
-        {ownerView === "settings" && (
-          <div className="rise">
-            <h2 className="font-display text-2xl font-bold uppercase text-mist-100">Settings</h2>
-            <p className="mt-2 text-sm text-mist-400">Owner settings - coming soon</p>
-          </div>
-        )}
-      </OwnerShell>
-    );
-  }
-
+  // Coach mode (me.role === "coach")
   return (
     <CoachShell view={coachView} setView={nav} onLogout={() => void signOut()}>
       {coachView === "dashboard" && <Dashboard go={go} openClientsWithFilter={openClientsWithFilter} />}

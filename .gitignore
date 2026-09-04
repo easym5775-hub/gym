@@ -1,4 +1,1 @@
-```
-# Supabase migrations
-supabase/migrations/*.sql
-```
+Nothing should be ignored based on the provided file changes. The changes only include TypeScript/JSX source files (.tsx) and no build artifacts, dependencies, or temporary files that would require gitignore entries.
