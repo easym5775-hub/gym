@@ -392,6 +392,8 @@ export interface Backend {
   resetClientPassword(clientId: string, newPassword: string): Promise<void>;
   deleteClientAccount(clientId: string): Promise<void>;
   updateCoachName(name: string): Promise<void>;
+  /** Load all coaches and subscriptions — for owner dashboard. */
+  loadAllCoachesAndSubscriptions?(): Promise<{ coaches: Row[]; subscriptions: Row[] }>;
 }
 
 const TABLES = [
@@ -455,15 +457,9 @@ class SupabaseBackend implements Backend {
 
   async ownerSignIn(email: string, password: string, remember: boolean): Promise<void> {
     setRemember(remember);
-    // For Supabase mode, check credentials and create a session for the owner
-    if (email.trim().toLowerCase() !== DEMO_OWNER_EMAIL || password !== DEMO_OWNER_PASSWORD) {
-      throw new Error("Invalid admin credentials.");
-    }
-    // In demo/development mode without a real owner user in auth, we store session info
-    // Production should have a proper owner account created in the database
-    // Store session marker for owner role detection in resolveRole
-    const sessionData = { userId: "owner-user-id", role: "owner", email: DEMO_OWNER_EMAIL };
-    localStorage.setItem("forge-owner-session", JSON.stringify(sessionData));
+    // For Supabase mode, use real Supabase Auth - no hardcoded credential check
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(error.message);
   }
 
   async signOut(): Promise<void> {
@@ -472,15 +468,10 @@ class SupabaseBackend implements Backend {
   }
 
   async resolveRole(userId: string): Promise<RoleInfo | null> {
-    // Check for owner role first (based on email or session marker)
-    const ownerSession = localStorage.getItem("forge-owner-session");
-    if (ownerSession) {
-      try {
-        const parsed = JSON.parse(ownerSession);
-        if (parsed.email?.toLowerCase() === DEMO_OWNER_EMAIL.toLowerCase()) {
-          return { role: "owner", userId, coachId: "", name: "Owner", email: parsed.email };
-        }
-      } catch {}
+    // Check for owner role first by querying the owners table (RLS-scoped)
+    const { data: owner } = await supabase.from("owners").select("id, name, email").eq("id", userId).maybeSingle();
+    if (owner) {
+      return { role: "owner", userId, coachId: "", name: String(owner.name ?? "Owner"), email: String(owner.email ?? "") };
     }
     const { data: coach } = await supabase.from("coaches").select("id, name, email").eq("id", userId).maybeSingle();
     if (coach) {
@@ -492,6 +483,17 @@ class SupabaseBackend implements Backend {
       return { role: "client", userId, coachId: client.coachId, name: client.name, email: client.email, client };
     }
     return null;
+  }
+
+  /** Load all coaches and subscriptions — works for owners due to RLS policy. */
+  async loadAllCoachesAndSubscriptions(): Promise<{ coaches: Row[]; subscriptions: Row[] }> {
+    const [{ data: coaches, error: e1 }, { data: subscriptions, error: e2 }] = await Promise.all([
+      supabase.from("coaches").select("*"),
+      supabase.from("coach_subscriptions").select("*"),
+    ]);
+    if (e1) throw new Error(e1.message);
+    if (e2) throw new Error(e2.message);
+    return { coaches: coaches as Row[], subscriptions: subscriptions as Row[] };
   }
 
   async load(): Promise<AppState> {
@@ -999,6 +1001,26 @@ class DemoBackend implements Backend {
     const store = readDemo();
     store.auth[DEMO_COACH_ID] = { ...store.auth[DEMO_COACH_ID], password: store.auth[DEMO_COACH_ID]?.password ?? DEMO_PASSWORD, name };
     writeDemo(store);
+  }
+
+  async loadAllCoachesAndSubscriptions(): Promise<{ coaches: Row[]; subscriptions: Row[] }> {
+    const store = readDemo();
+    // In demo mode, return all coaches (just the demo coach) and all subscriptions
+    const coaches: Row[] = [{ id: DEMO_COACH_ID, name: store.auth[DEMO_COACH_ID]?.name ?? "Coach Dana", email: DEMO_COACH_EMAIL }];
+    const subscriptions: Row[] = store.state.subscriptions.map((s) => ({
+      id: s.id,
+      coach_id: s.coachId,
+      client_id: s.clientId,
+      plan_name: s.planName,
+      status: "ACTIVE",
+      start_date: s.startDate,
+      end_date: s.endDate,
+      price: s.price,
+      auto_renew: false,
+      created_at: new Date(s.createdAt).toISOString(),
+      updated_at: new Date().toISOString(),
+    }));
+    return { coaches, subscriptions };
   }
 }
 
