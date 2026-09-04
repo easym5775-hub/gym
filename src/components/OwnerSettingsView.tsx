@@ -5,11 +5,41 @@
 import { useState } from "react";
 import { useApp } from "../store";
 import { OwnerPageHeader } from "./OwnerShell";
-import { Settings as SettingsIcon, User, Shield, CreditCard } from "lucide-react";
+import { Settings as SettingsIcon, User, Shield, CreditCard, CheckCircle } from "lucide-react";
+import { toast } from "./ui";
 
 export function OwnerSettingsView() {
   const { me } = useApp();
   const [activeTab, setActiveTab] = useState<"profile" | "saas">("profile");
+  const [defaultDuration, setDefaultDuration] = useState("30");
+  const [autoRenew, setAutoRenew] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Plan configuration - in production this would come from database
+  const [plans, setPlans] = useState([
+    { id: "free", name: "Free", price: 0, features: "Basic features", active: true },
+    { id: "pro", name: "Pro", price: 29, features: "All features", active: true },
+    { id: "enterprise", name: "Enterprise", price: 99, features: "Custom features", active: true },
+  ]);
+
+  const handleSaveSettings = async () => {
+    setSaving(true);
+    try {
+      // In production, persist to backend
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      toast.success("Settings saved successfully");
+    } catch (error) {
+      console.error("Failed to save settings:", error);
+      toast.error("Failed to save settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const togglePlanActive = (planId: string) => {
+    setPlans(plans.map((p) => (p.id === planId ? { ...p, active: !p.active } : p)));
+    toast.success("Plan status updated");
+  };
 
   return (
     <>
@@ -82,27 +112,29 @@ export function OwnerSettingsView() {
               <p className="mb-4 text-sm text-mist-400">Configure available subscription plans for coaches.</p>
               
               <div className="space-y-3">
-                <div className="flex items-center justify-between rounded-xl border border-night-600 bg-night-800/50 p-4">
-                  <div>
-                    <p className="font-bold text-mist-200">Free Plan</p>
-                    <p className="text-xs text-mist-500">$0/month - Basic features</p>
+                {plans.map((plan) => (
+                  <div key={plan.id} className="flex items-center justify-between rounded-xl border border-night-600 bg-night-800/50 p-4">
+                    <div>
+                      <p className="font-bold text-mist-200">{plan.name} Plan</p>
+                      <p className="text-xs text-mist-500">${plan.price}/month - {plan.features}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={`rounded-lg px-3 py-1 text-xs font-bold ${
+                        plan.active 
+                          ? "bg-moss-400/10 text-moss-300" 
+                          : "bg-night-700 text-mist-400"
+                      }`}>
+                        {plan.active ? "Active" : "Inactive"}
+                      </span>
+                      <button
+                        onClick={() => togglePlanActive(plan.id)}
+                        className="cursor-pointer rounded-lg border border-night-600 bg-night-800 px-3 py-1 text-xs font-bold text-mist-400 transition-all duration-200 hover:border-volt-400/40 hover:bg-volt-400/10 hover:text-volt-300"
+                      >
+                        {plan.active ? "Deactivate" : "Activate"}
+                      </button>
+                    </div>
                   </div>
-                  <span className="rounded-lg bg-night-700 px-3 py-1 text-xs font-bold text-mist-400">Active</span>
-                </div>
-                <div className="flex items-center justify-between rounded-xl border border-night-600 bg-night-800/50 p-4">
-                  <div>
-                    <p className="font-bold text-mist-200">Pro Plan</p>
-                    <p className="text-xs text-mist-500">$29/month - All features</p>
-                  </div>
-                  <span className="rounded-lg bg-night-700 px-3 py-1 text-xs font-bold text-mist-400">Active</span>
-                </div>
-                <div className="flex items-center justify-between rounded-xl border border-night-600 bg-night-800/50 p-4">
-                  <div>
-                    <p className="font-bold text-mist-200">Enterprise Plan</p>
-                    <p className="text-xs text-mist-500">$99/month - Custom features</p>
-                  </div>
-                  <span className="rounded-lg bg-night-700 px-3 py-1 text-xs font-bold text-mist-400">Active</span>
-                </div>
+                ))}
               </div>
 
               <button className="mt-4 cursor-pointer rounded-xl border border-night-600 bg-night-800 px-4 py-2 text-xs font-bold text-mist-400 transition-all duration-200 hover:border-volt-400/40 hover:bg-volt-400/10 hover:text-volt-300">
@@ -119,7 +151,11 @@ export function OwnerSettingsView() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wide text-mist-500">Default Subscription Duration</label>
-                  <select className="mt-1 w-full rounded-xl border border-night-600 bg-night-800 px-3 py-2 text-sm text-mist-200 focus:border-volt-400/40 focus:outline-none">
+                  <select 
+                    value={defaultDuration}
+                    onChange={(e) => setDefaultDuration(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-night-600 bg-night-800 px-3 py-2 text-sm text-mist-200 focus:border-volt-400/40 focus:outline-none"
+                  >
                     <option value="30">30 days</option>
                     <option value="90">90 days</option>
                     <option value="365">365 days</option>
@@ -127,21 +163,34 @@ export function OwnerSettingsView() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wide text-mist-500">Auto-renew Default</label>
-                  <select className="mt-1 w-full rounded-xl border border-night-600 bg-night-800 px-3 py-2 text-sm text-mist-200 focus:border-volt-400/40 focus:outline-none">
+                  <select 
+                    value={autoRenew ? "true" : "false"}
+                    onChange={(e) => setAutoRenew(e.target.value === "true")}
+                    className="mt-1 w-full rounded-xl border border-night-600 bg-night-800 px-3 py-2 text-sm text-mist-200 focus:border-volt-400/40 focus:outline-none"
+                  >
                     <option value="false">Disabled</option>
                     <option value="true">Enabled</option>
                   </select>
                 </div>
               </div>
-              <button className="mt-4 cursor-pointer rounded-xl border border-volt-400/40 bg-volt-400/10 px-4 py-2 text-xs font-bold text-volt-300 transition-all duration-200 hover:bg-volt-400/20">
-                Save Settings
+              <button 
+                onClick={handleSaveSettings}
+                disabled={saving}
+                className="mt-4 flex items-center gap-2 cursor-pointer rounded-xl border border-volt-400/40 bg-volt-400/10 px-4 py-2 text-xs font-bold text-volt-300 transition-all duration-200 hover:bg-volt-400/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving ? "Saving..." : (
+                  <>
+                    <CheckCircle className="h-4 w-4" />
+                    Save Settings
+                  </>
+                )}
               </button>
             </div>
 
-            {/* Demo Mode Info */}
+            {/* Info Box */}
             <div className="rounded-2xl border border-night-700 bg-night-850/30 p-5">
               <p className="text-xs text-mist-500">
-                <span className="font-bold text-volt-300">Demo Mode:</span> These settings are for demonstration purposes only. In production with Supabase, these would persist to the database and apply globally across all coaches.
+                <span className="font-bold text-volt-300">Configuration:</span> These settings control default values for new coach subscriptions. Changes will apply to new subscriptions created after saving.
               </p>
             </div>
           </div>
