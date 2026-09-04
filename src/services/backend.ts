@@ -779,17 +779,17 @@ class DemoBackend implements Backend {
   readonly kind = "demo" as const;
   private listeners = new Set<(userId: string | null) => void>();
 
-  private session(): { userId: string; role: "coach" | "client" | "owner" } | null {
+  private session(): { userId: string; role: "coach" | "client" } | null {
     try {
       // A still-live non-remembered (sessionStorage) session takes precedence.
       const raw = sessionStorage.getItem(DEMO_SESSION_KEY) ?? localStorage.getItem(DEMO_SESSION_KEY);
-      return raw ? (JSON.parse(raw) as { userId: string; role: "coach" | "client" | "owner" }) : null;
+      return raw ? (JSON.parse(raw) as { userId: string; role: "coach" | "client" }) : null;
     } catch {
       return null;
     }
   }
 
-  private setSession(userId: string | null, role: "coach" | "client" | "owner" = "coach", remember = true): void {
+  private setSession(userId: string | null, role: "coach" | "client" = "coach", remember = true): void {
     setRemember(remember);
     try {
       if (userId) {
