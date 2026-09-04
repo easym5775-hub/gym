@@ -789,7 +789,7 @@ class DemoBackend implements Backend {
     }
   }
 
-  private setSession(userId: string | null, role: "coach" | "client" = "coach", remember = true): void {
+  private setSession(userId: string | null, role: "coach" | "client" | "owner" = "coach", remember = true): void {
     setRemember(remember);
     try {
       if (userId) {
