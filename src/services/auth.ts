@@ -14,6 +14,10 @@ export const coachSignIn = (email: string, password: string, remember: boolean):
 export const clientSignIn = (username: string, password: string, remember: boolean): Promise<void> =>
   backend.clientSignIn(username, password, remember);
 
+/** Owner/Admin sign in with email and password. */
+export const ownerSignIn = (email: string, password: string, remember: boolean): Promise<void> =>
+  backend.ownerSignIn(email, password, remember);
+
 export const signOut = (): Promise<void> => backend.signOut();
 
 export const getSessionUserId = (): Promise<string | null> => backend.getSessionUserId();

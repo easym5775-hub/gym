@@ -3,7 +3,7 @@
    ================================================================ */
 
 import { useState } from "react";
-import { ArrowRight, Check, Dumbbell, User, Users, Zap } from "lucide-react";
+import { ArrowRight, Check, Dumbbell, User, Users, Zap, Shield } from "lucide-react";
 import { DEMO_COACH_EMAIL, DEMO_PASSWORD, isDemoMode } from "../services/backend";
 import { coachSignIn, coachSignUp, clientSignIn } from "../services/auth";
 import { errorMessage } from "../lib";
@@ -11,7 +11,7 @@ import { btnPrimary, inputCls, labelCls } from "./ui";
 
 const TICKER = ["STRENGTH", "NUTRITION", "RECOVERY", "CONSISTENCY", "PROGRESS", "DISCIPLINE", "OVERLOAD", "FORM FIRST"];
 
-export function Auth() {
+export function Auth({ onShowAdmin }: { onShowAdmin?: () => void }) {
   const [role, setRole] = useState<"coach" | "client">("coach");
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
@@ -209,6 +209,19 @@ export function Auth() {
                   Clients: <span className="font-bold text-mist-200">ahmed</span>, <span className="font-bold text-mist-200">sara</span>,{" "}
                   <span className="font-bold text-mist-200">omar</span> / <span className="font-bold text-mist-200">{DEMO_PASSWORD}</span>
                 </p>
+              </div>
+            )}
+
+            {/* Hidden Admin Sign In Link */}
+            {onShowAdmin && (
+              <div className="mt-4 flex justify-center">
+                <button
+                  onClick={onShowAdmin}
+                  className="group flex cursor-pointer items-center gap-2 rounded-xl border border-night-700 bg-night-800/30 px-3 py-2 text-[10px] font-bold text-mist-600 transition-all duration-200 hover:border-volt-400/20 hover:bg-volt-400/5 hover:text-volt-400"
+                >
+                  <Shield className="h-3 w-3" />
+                  Sign in as Admin
+                </button>
               </div>
             )}
           </div>

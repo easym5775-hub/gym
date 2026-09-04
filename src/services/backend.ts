@@ -56,7 +56,7 @@ const supabase = createClient(
 /* ---------------- role model ---------------- */
 
 export interface RoleInfo {
-  role: "coach" | "client";
+  role: "coach" | "client" | "owner";
   userId: string;
   coachId: string;
   name: string;
@@ -381,6 +381,7 @@ export interface Backend {
   coachSignUp(email: string, password: string, name: string, remember: boolean): Promise<void>;
   coachSignIn(email: string, password: string, remember: boolean): Promise<void>;
   clientSignIn(username: string, password: string, remember: boolean): Promise<void>;
+  ownerSignIn(email: string, password: string, remember: boolean): Promise<void>;
   signOut(): Promise<void>;
   resolveRole(userId: string): Promise<RoleInfo | null>;
   load(): Promise<AppState>;
@@ -452,11 +453,35 @@ class SupabaseBackend implements Backend {
     if (signErr) throw new Error("Invalid username or password.");
   }
 
+  async ownerSignIn(email: string, password: string, remember: boolean): Promise<void> {
+    setRemember(remember);
+    // For Supabase mode, check credentials and create a session for the owner
+    if (email.trim().toLowerCase() !== DEMO_OWNER_EMAIL || password !== DEMO_OWNER_PASSWORD) {
+      throw new Error("Invalid admin credentials.");
+    }
+    // In demo/development mode without a real owner user in auth, we store session info
+    // Production should have a proper owner account created in the database
+    // Store session marker for owner role detection in resolveRole
+    const sessionData = { userId: "owner-user-id", role: "owner", email: DEMO_OWNER_EMAIL };
+    localStorage.setItem("forge-owner-session", JSON.stringify(sessionData));
+  }
+
   async signOut(): Promise<void> {
     await supabase.auth.signOut();
+    localStorage.removeItem("forge-owner-session");
   }
 
   async resolveRole(userId: string): Promise<RoleInfo | null> {
+    // Check for owner role first (based on email or session marker)
+    const ownerSession = localStorage.getItem("forge-owner-session");
+    if (ownerSession) {
+      try {
+        const parsed = JSON.parse(ownerSession);
+        if (parsed.email?.toLowerCase() === DEMO_OWNER_EMAIL.toLowerCase()) {
+          return { role: "owner", userId, coachId: "", name: "Owner", email: parsed.email };
+        }
+      } catch {}
+    }
     const { data: coach } = await supabase.from("coaches").select("id, name, email").eq("id", userId).maybeSingle();
     if (coach) {
       return { role: "coach", userId, coachId: userId, name: String(coach.name ?? "Coach"), email: String(coach.email ?? "") };
@@ -549,8 +574,11 @@ class SupabaseBackend implements Backend {
 const DEMO_DATA_KEY = "forge-demo-data-v1";
 const DEMO_SESSION_KEY = "forge-demo-session-v1";
 const DEMO_COACH_ID = "coach-demo-0001";
+const DEMO_OWNER_ID = "owner-demo-0001";
 export const DEMO_PASSWORD = "forge123";
 export const DEMO_COACH_EMAIL = "coach@forge.fit";
+export const DEMO_OWNER_EMAIL = "admin@forge.demo";
+export const DEMO_OWNER_PASSWORD = "ForgeAdmin123!";
 
 interface DemoAuthEntry {
   password: string;
@@ -810,11 +838,27 @@ class DemoBackend implements Backend {
     this.setSession(client.id, "client", remember);
   }
 
+  async ownerSignIn(email: string, password: string, remember: boolean): Promise<void> {
+    if (email.trim().toLowerCase() !== DEMO_OWNER_EMAIL || password !== DEMO_OWNER_PASSWORD) {
+      throw new Error(`Demo mode: use ${DEMO_OWNER_EMAIL} / ${DEMO_OWNER_PASSWORD}.`);
+    }
+    this.setSession(DEMO_OWNER_ID, "owner", remember);
+  }
+
   async signOut(): Promise<void> {
     this.setSession(null);
   }
 
   async resolveRole(userId: string): Promise<RoleInfo | null> {
+    if (userId === DEMO_OWNER_ID) {
+      return {
+        role: "owner",
+        userId,
+        coachId: "",
+        name: "Owner",
+        email: DEMO_OWNER_EMAIL,
+      };
+    }
     if (userId === DEMO_COACH_ID) {
       const store = readDemo();
       return {
