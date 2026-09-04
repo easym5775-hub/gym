@@ -1,5 +1,5 @@
 /* ================================================================
-   FORGE — app root: auth phases + coach/client routing.
+   FORGE — app root: auth phases + coach/client/owner routing.
    ================================================================ */
 
 import { useState } from "react";
@@ -8,14 +8,21 @@ import type { CoachView } from "./types";
 import { StoreProvider, useApp } from "./store";
 import { Toasts } from "./components/ui";
 import { Auth } from "./components/Auth";
+import { AdminAuth } from "./components/AdminAuth";
 import { CoachShell } from "./components/Shell";
+import { OwnerShell } from "./components/OwnerShell";
 import { Dashboard } from "./components/Dashboard";
 import { ClientsView, ClientProfile, type ClientsFilter } from "./components/Clients";
 import { PlansView, MealsView, LibraryView, CheckInsView } from "./components/Workspaces";
 import { SettingsView } from "./components/Settings";
 import { ClientApp } from "./components/ClientApp";
 import { NutritionPlanView } from "./components/NutritionPlan";
+import { OwnerDashboard } from "./components/OwnerDashboard";
+import { OwnerCoachesView } from "./components/OwnerCoachesView";
+import { OwnerSubscriptionsView } from "./components/OwnerSubscriptionsView";
 import { signOut } from "./services/auth";
+
+type OwnerView = "dashboard" | "coaches" | "subscriptions" | "analytics" | "settings";
 
 function Splash({ label }: { label: string }) {
   return (
@@ -38,7 +45,9 @@ function Splash({ label }: { label: string }) {
 
 function Root() {
   const { phase, me } = useApp();
-  const [view, setView] = useState<CoachView>("dashboard");
+  const [coachView, setCoachView] = useState<CoachView>("dashboard");
+  const [ownerView, setOwnerView] = useState<OwnerView>("dashboard");
+  const [showAdminAuth, setShowAdminAuth] = useState(false);
   const [clientPreset, setClientPreset] = useState<string | null>(null);
   const [planPreset, setPlanPreset] = useState<string | null>(null);
   const [mealPreset, setMealPreset] = useState<string | null>(null);
@@ -50,43 +59,70 @@ function Root() {
     if (v === "plans") setPlanPreset(id ?? null);
     if (v === "meals") setMealPreset(id ?? null);
     if (v === "clients") setClientsFilter(null);
-    setView(v);
+    setCoachView(v);
   };
 
   /** Dashboard deep-link: jump straight into a pre-filtered roster. */
   const openClientsWithFilter = (f: "Active" | "Expiring Soon" | "Expired") => {
     setClientsFilter(f);
-    setView("clients");
+    setCoachView("clients");
   };
 
   /** Sidebar navigation always lands on an unfiltered view. */
   const nav = (v: CoachView) => {
     if (v === "clients") setClientsFilter(null);
-    setView(v);
+    setCoachView(v);
   };
+
+  // Show admin auth screen
+  if (showAdminAuth) {
+    return <AdminAuth onBack={() => setShowAdminAuth(false)} />;
+  }
 
   if (phase === "booting" || phase === "loading") {
     return <Splash label={phase === "booting" ? "Waking up…" : "Loading your data…"} />;
   }
 
   if (phase === "signed-out" || !me) {
-    return <Auth />;
+    return <Auth onShowAdmin={() => setShowAdminAuth(true)} />;
   }
 
   if (me.role === "client") {
     return <ClientApp onLogout={() => void signOut()} />;
   }
 
+  if (me.role === "owner") {
+    return (
+      <OwnerShell view={ownerView} setView={setOwnerView} onLogout={() => void signOut()}>
+        {ownerView === "dashboard" && <OwnerDashboard />}
+        {ownerView === "coaches" && <OwnerCoachesView />}
+        {ownerView === "subscriptions" && <OwnerSubscriptionsView />}
+        {ownerView === "analytics" && (
+          <div className="rise">
+            <h2 className="font-display text-2xl font-bold uppercase text-mist-100">Analytics</h2>
+            <p className="mt-2 text-sm text-mist-400">Analytics view - coming soon</p>
+          </div>
+        )}
+        {ownerView === "settings" && (
+          <div className="rise">
+            <h2 className="font-display text-2xl font-bold uppercase text-mist-100">Settings</h2>
+            <p className="mt-2 text-sm text-mist-400">Owner settings - coming soon</p>
+          </div>
+        )}
+      </OwnerShell>
+    );
+  }
+
   return (
-    <CoachShell view={view} setView={nav} onLogout={() => void signOut()}>
-      {view === "dashboard" && <Dashboard go={go} openClientsWithFilter={openClientsWithFilter} />}
-      {view === "clients" && <ClientsView key={clientsFilter ?? "all"} go={go} initialFilter={clientsFilter ?? undefined} />}
-      {view === "client" && clientPreset && <ClientProfile key={clientPreset} clientId={clientPreset} go={go} />}
-      {view === "plans" && <PlansView presetClientId={planPreset} />}
-      {view === "meals" && <NutritionPlanView presetClientId={mealPreset} />}
-      {view === "library" && <LibraryView />}
-      {view === "checkins" && <CheckInsView go={go} />}
-      {view === "settings" && <SettingsView />}
+    <CoachShell view={coachView} setView={nav} onLogout={() => void signOut()}>
+      {coachView === "dashboard" && <Dashboard go={go} openClientsWithFilter={openClientsWithFilter} />}
+      {coachView === "clients" && <ClientsView key={clientsFilter ?? "all"} go={go} initialFilter={clientsFilter ?? undefined} />}
+      {coachView === "client" && clientPreset && <ClientProfile key={clientPreset} clientId={clientPreset} go={go} />}
+      {coachView === "plans" && <PlansView presetClientId={planPreset} />}
+      {coachView === "meals" && <NutritionPlanView presetClientId={mealPreset} />}
+      {coachView === "library" && <LibraryView />}
+      {coachView === "checkins" && <CheckInsView go={go} />}
+      {coachView === "settings" && <SettingsView />}
     </CoachShell>
   );
 }
