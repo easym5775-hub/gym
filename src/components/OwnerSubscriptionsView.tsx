@@ -7,10 +7,9 @@ import { useApp } from "../store";
 import { OwnerPageHeader } from "./OwnerShell";
 import { Shield, Calendar, DollarSign, MoreVertical, CheckCircle, Clock, XCircle, Users } from "lucide-react";
 import backend from "../services/backend";
-import { toast } from "../components/ui";
 
 export function OwnerSubscriptionsView() {
-  const { state, refresh } = useApp();
+  const { state, refresh, toast } = useApp();
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "expired" | "pending">("all");
   const [loading, setLoading] = useState(false);
   const [planModalOpen, setPlanModalOpen] = useState(false);
