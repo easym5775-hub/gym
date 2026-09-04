@@ -14,6 +14,7 @@ import { ClientsView, ClientProfile, type ClientsFilter } from "./components/Cli
 import { PlansView, MealsView, LibraryView, CheckInsView } from "./components/Workspaces";
 import { SettingsView } from "./components/Settings";
 import { ClientApp } from "./components/ClientApp";
+import { NutritionPlanView } from "./components/NutritionPlan";
 import { signOut } from "./services/auth";
 
 function Splash({ label }: { label: string }) {
@@ -82,7 +83,7 @@ function Root() {
       {view === "clients" && <ClientsView key={clientsFilter ?? "all"} go={go} initialFilter={clientsFilter ?? undefined} />}
       {view === "client" && clientPreset && <ClientProfile key={clientPreset} clientId={clientPreset} go={go} />}
       {view === "plans" && <PlansView presetClientId={planPreset} />}
-      {view === "meals" && <MealsView presetClientId={mealPreset} />}
+      {view === "meals" && <NutritionPlanView presetClientId={mealPreset} />}
       {view === "library" && <LibraryView />}
       {view === "checkins" && <CheckInsView go={go} />}
       {view === "settings" && <SettingsView />}

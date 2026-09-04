@@ -184,24 +184,30 @@ export const rowToCheckIn = (r: Row): CheckIn => ({
 
 export const mealToRow = (m: Meal): Row => ({
   client_id: m.clientId,
+  day: m.day,
   type: m.type,
+  time: m.time ?? null,
   description: m.description,
   calories: m.calories,
   protein: m.protein,
   carbs: m.carbs,
   fats: m.fats,
+  notes: m.notes ?? null,
 });
 
 export const rowToMeal = (r: Row): Meal => ({
   id: String(r.id),
   coachId: String(r.coach_id ?? ""),
   clientId: String(r.client_id ?? ""),
+  day: Number(r.day) || 1,
   type: (r.type as Meal["type"]) ?? "Snack",
+  time: r.time ? String(r.time) : undefined,
   description: String(r.description ?? ""),
   calories: Number(r.calories) || 0,
   protein: Number(r.protein) || 0,
   carbs: Number(r.carbs) || 0,
   fats: Number(r.fats) || 0,
+  notes: r.notes ? String(r.notes) : undefined,
 });
 
 export const subscriptionToRow = (s: Subscription): Row => ({
@@ -608,9 +614,9 @@ function seedData(): DemoStore {
   ];
 
   const meals: Meal[] = [
-    { id: uuid(), coachId, clientId: c1.id, type: "Breakfast", description: "Oats + berries + whey", calories: 380, protein: 32, carbs: 48, fats: 7 },
-    { id: uuid(), coachId, clientId: c1.id, type: "Lunch", description: "Grilled chicken, rice, salad", calories: 620, protein: 45, carbs: 62, fats: 12 },
-    { id: uuid(), coachId, clientId: c2.id, type: "Breakfast", description: "4 eggs, toast, avocado", calories: 720, protein: 38, carbs: 48, fats: 36 },
+    { id: uuid(), coachId, clientId: c1.id, day: 1, type: "Breakfast", time: "08:00", description: "Oats + berries + whey", calories: 380, protein: 32, carbs: 48, fats: 7 },
+    { id: uuid(), coachId, clientId: c1.id, day: 1, type: "Lunch", time: "13:00", description: "Grilled chicken, rice, salad", calories: 620, protein: 45, carbs: 62, fats: 12 },
+    { id: uuid(), coachId, clientId: c2.id, day: 1, type: "Breakfast", time: "07:30", description: "4 eggs, toast, avocado", calories: 720, protein: 38, carbs: 48, fats: 36 },
   ];
 
   const checkIns: CheckIn[] = [
