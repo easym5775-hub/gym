@@ -449,43 +449,54 @@ export function MealFormModal({
   clientId,
   initial,
   defaultType,
+  defaultDay,
   onClose,
 }: {
   open: boolean;
   clientId: string;
   initial: Meal | null;
   defaultType?: MealType;
+  defaultDay?: number;
   onClose: () => void;
 }) {
   const { addMeal, updateMeal } = useApp();
+  const [day, setDay] = useState<number>(defaultDay ?? 1);
   const [type, setType] = useState<MealType>("Breakfast");
+  const [time, setTime] = useState("");
   const [description, setDescription] = useState("");
   const [calories, setCalories] = useState("450");
   const [protein, setProtein] = useState("30");
   const [carbs, setCarbs] = useState("40");
   const [fats, setFats] = useState("12");
+  const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!open) return;
+    setDay(initial?.day ?? defaultDay ?? 1);
     setType(initial?.type ?? defaultType ?? "Breakfast");
+    setTime(initial?.time ?? "");
     setDescription(initial?.description ?? "");
     setCalories(String(initial?.calories ?? 450));
     setProtein(String(initial?.protein ?? 30));
     setCarbs(String(initial?.carbs ?? 40));
     setFats(String(initial?.fats ?? 12));
+    setNotes(initial?.notes ?? "");
     setError("");
-  }, [open, initial, defaultType]);
+  }, [open, initial, defaultType, defaultDay]);
 
   const save = () => {
     if (!description.trim()) return setError("Describe the meal first.");
     const data = {
+      day,
       type,
+      time: time.trim() || undefined,
       description: description.trim(),
       calories: Math.max(0, Number(calories) || 0),
       protein: Math.max(0, Number(protein) || 0),
       carbs: Math.max(0, Number(carbs) || 0),
       fats: Math.max(0, Number(fats) || 0),
+      notes: notes.trim() || undefined,
     };
     if (initial) updateMeal({ ...initial, ...data });
     else addMeal({ clientId, ...data });
@@ -495,6 +506,16 @@ export function MealFormModal({
   return (
     <Modal open={open} onClose={onClose} title={initial ? "Edit meal" : "Assign meal"}>
       <div className="grid gap-4">
+        <div>
+          <label className={labelCls}>Day</label>
+          <select className={inputCls} value={day} onChange={(e) => setDay(Number(e.target.value))}>
+            {WEEK_DAYS.map((d, i) => (
+              <option key={d} value={i + 1}>
+                {d}
+              </option>
+            ))}
+          </select>
+        </div>
         <div>
           <label className={labelCls}>Meal type</label>
           <div className="grid grid-cols-4 gap-1.5">
@@ -513,6 +534,10 @@ export function MealFormModal({
           </div>
         </div>
         <div>
+          <label className={labelCls}>Time (optional)</label>
+          <input className={inputCls} type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+        </div>
+        <div>
           <label className={labelCls}>Food description *</label>
           <textarea className={textareaCls} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Grilled chicken, rice, salad…" />
         </div>
@@ -528,6 +553,10 @@ export function MealFormModal({
               <input className={inputCls} type="number" min={0} value={f.v} onChange={(e) => f.s(e.target.value)} />
             </div>
           ))}
+        </div>
+        <div>
+          <label className={labelCls}>Notes (optional)</label>
+          <textarea className={textareaCls} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Prep tips, substitutions…" />
         </div>
       </div>
       {error && <p className="mt-3 text-xs font-bold text-danger-400">{error}</p>}
@@ -986,6 +1015,141 @@ export function PhotoModal({ src, onClose }: { src: string | null; onClose: () =
         </button>
       </div>
     </div>
+  );
+}
+
+/* ---------------- copy day modal ---------------- */
+
+export function CopyDayModal({
+  open,
+  clientId,
+  sourceDay,
+  meals,
+  onClose,
+}: {
+  open: boolean;
+  clientId: string;
+  sourceDay: number;
+  meals: Meal[];
+  onClose: () => void;
+}) {
+  const { addMeal } = useApp();
+  const [destDays, setDestDays] = useState<number[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setDestDays([]);
+      setBusy(false);
+    }
+  }, [open]);
+
+  const sourceMeals = meals.filter((m) => m.day === sourceDay);
+  const otherDays = [2, 3, 4, 5, 6, 7].filter((d) => d !== sourceDay);
+
+  const toggleDay = (day: number) => {
+    setDestDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
+  };
+
+  const handleCopy = () => {
+    if (destDays.length === 0 || sourceMeals.length === 0) return;
+
+    setBusy(true);
+    
+    // Check if any destination days have existing meals
+    const daysWithMeals = destDays.filter((d) => meals.some((m) => m.day === d && m.clientId === clientId));
+    
+    if (daysWithMeals.length > 0) {
+      // Show confirmation - for simplicity we'll proceed with append behavior
+      // In a more complex system we'd show a proper confirmation dialog
+    }
+
+    // Copy meals to each selected day
+    destDays.forEach((destDay) => {
+      sourceMeals.forEach((meal) => {
+        addMeal({
+          clientId,
+          day: destDay,
+          type: meal.type,
+          time: meal.time,
+          description: meal.description,
+          calories: meal.calories,
+          protein: meal.protein,
+          carbs: meal.carbs,
+          fats: meal.fats,
+          notes: meal.notes,
+        });
+      });
+    });
+
+    setBusy(false);
+    onClose();
+  };
+
+  const hasSourceMeals = sourceMeals.length > 0;
+
+  return (
+    <Modal open={open} onClose={onClose} title="Copy Day">
+      <div className="grid gap-4">
+        <p className="text-sm text-mist-400">
+          Copy all meals from <strong>{WEEK_DAYS[sourceDay - 1]}</strong> to:
+        </p>
+        
+        {!hasSourceMeals ? (
+          <div className="rounded-xl border border-warn-400/25 bg-warn-400/10 p-3 text-sm text-warn-300">
+            {WEEK_DAYS[sourceDay - 1]} has no meals to copy.
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              {otherDays.map((day) => {
+                const dayHasMeals = meals.some((m) => m.day === day && m.clientId === clientId);
+                const isChecked = destDays.includes(day);
+                
+                return (
+                  <label
+                    key={day}
+                    className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${
+                      isChecked
+                        ? "border-volt-400 bg-volt-400/15 text-volt-300"
+                        : "border-night-600 bg-night-800 text-mist-300 hover:border-night-500"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => toggleDay(day)}
+                      className="h-4 w-4 accent-volt-400"
+                    />
+                    <span className="flex-1 font-semibold">{WEEK_DAYS[day - 1]}</span>
+                    {dayHasMeals && <span className="text-[10px] text-warn-400">(has meals)</span>}
+                  </label>
+                );
+              })}
+            </div>
+            
+            <div className="rounded-xl bg-night-800 p-3">
+              <p className="text-xs text-mist-500">
+                Will copy <strong>{sourceMeals.length}</strong> meal{sourceMeals.length !== 1 ? "s" : ""} to {destDays.length} day{destDays.length !== 1 ? "s" : ""}
+              </p>
+            </div>
+          </>
+        )}
+      </div>
+      
+      <div className="mt-5 flex gap-2">
+        <button 
+          className={`${btnPrimary} flex-1`} 
+          onClick={handleCopy}
+          disabled={!hasSourceMeals || destDays.length === 0 || busy}
+        >
+          {busy ? "Copying..." : `Copy to ${destDays.length} Day${destDays.length !== 1 ? "s" : ""}`}
+        </button>
+        <button className={btnSecondary} onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </Modal>
   );
 }
 

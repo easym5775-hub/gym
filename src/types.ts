@@ -92,12 +92,15 @@ export interface Meal {
   id: string;
   coachId: string;
   clientId: string;
+  day: number; // 1..7 — Day 1 = Monday
   type: MealType;
+  time?: string; // HH:mm (optional)
   description: string;
   calories: number;
   protein: number;
   carbs: number;
   fats: number;
+  notes?: string;
 }
 
 export interface Subscription {
