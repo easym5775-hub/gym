@@ -7,7 +7,7 @@ import { useApp } from "../store";
 import { OwnerShell, OwnerPageHeader } from "./OwnerShell";
 import { signOut } from "../services/auth";
 import type { OwnerView } from "./OwnerShell";
-import { Shield, Calendar, DollarSign, MoreVertical, CheckCircle, Clock, XCircle } from "lucide-react";
+import { Shield, Calendar, DollarSign, MoreVertical, CheckCircle, Clock, XCircle, Users } from "lucide-react";
 
 export function OwnerSubscriptionsView() {
   const [view, setView] = useState<OwnerView>("subscriptions");

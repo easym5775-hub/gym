@@ -11,7 +11,7 @@ export type PaymentMethod = "Cash" | "Card" | "Bank Transfer" | "Other";
 export type PaymentStatus = "Paid" | "Pending";
 export type SubscriptionPaymentStatus = "Paid" | "Pending" | "Partial";
 export type SubState = "Active" | "Expiring Soon" | "Expired" | "No Subscription";
-export type SenderRole = "coach" | "client";
+export type SenderRole = "coach" | "client" | "owner";
 export type NotificationKind = "message" | "plan_updated" | "meal_updated" | "reminder" | "subscription";
 
 export type CoachView = "dashboard" | "clients" | "client" | "plans" | "meals" | "library" | "checkins" | "settings";
