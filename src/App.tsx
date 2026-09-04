@@ -2,7 +2,7 @@
    FORGE — app root: auth phases + coach/client/owner routing.
    ================================================================ */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dumbbell } from "lucide-react";
 import type { CoachView } from "./types";
 import { StoreProvider, useApp } from "./store";
@@ -20,6 +20,8 @@ import { NutritionPlanView } from "./components/NutritionPlan";
 import { OwnerDashboard } from "./components/OwnerDashboard";
 import { OwnerCoachesView } from "./components/OwnerCoachesView";
 import { OwnerSubscriptionsView } from "./components/OwnerSubscriptionsView";
+import { OwnerAnalyticsView } from "./components/OwnerAnalyticsView";
+import { OwnerSettingsView } from "./components/OwnerSettingsView";
 import { signOut } from "./services/auth";
 
 type OwnerView = "dashboard" | "coaches" | "subscriptions" | "analytics" | "settings";
@@ -52,6 +54,17 @@ function Root() {
   const [planPreset, setPlanPreset] = useState<string | null>(null);
   const [mealPreset, setMealPreset] = useState<string | null>(null);
   const [clientsFilter, setClientsFilter] = useState<ClientsFilter | null>(null);
+
+  // Listen for owner view change events from dashboard
+  useEffect(() => {
+    const handleOwnerViewChange = (event: CustomEvent<OwnerView>) => {
+      setOwnerView(event.detail);
+    };
+    window.addEventListener('owner-view-change', handleOwnerViewChange as EventListener);
+    return () => {
+      window.removeEventListener('owner-view-change', handleOwnerViewChange as EventListener);
+    };
+  }, []);
 
   /** Internal navigation — keeps deep-link presets in sync. */
   const go = (v: CoachView, id?: string) => {
