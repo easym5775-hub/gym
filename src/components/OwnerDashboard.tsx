@@ -8,41 +8,30 @@ import { Users, Shield, TrendingUp, AlertCircle, CheckCircle2, Clock, XCircle } 
 
 export function OwnerDashboard() {
   const { me, state } = useApp();
-  const setOwnerView = (view: string) => {
-    const event = new CustomEvent('owner-view-change', { detail: view });
-    window.dispatchEvent(event);
-  };
 
   // Calculate dashboard metrics from real data
-  const totalCoaches = state.coaches.length || 1; // Demo mode has 1 coach
-  const activeCoaches = state.coaches.filter((c) => c.accountStatus === "active").length || 1;
-  const inactiveCoaches = state.coaches.filter((c) => c.accountStatus === "inactive").length;
-  const suspendedCoaches = state.coaches.filter((c) => c.accountStatus === "suspended").length;
+  const totalCoaches = 1; // Demo mode has 1 coach
+  const activeCoaches = 1;
+  const inactiveCoaches = 0;
+  const suspendedCoaches = 0;
 
   const totalClients = state.clients.length;
   const activeClients = state.clients.filter((c) => c.status === "Active").length;
 
-  const totalSubscriptions = state.coachSubscriptions.length;
-  const activeSubscriptions = state.coachSubscriptions.filter((s) => {
-    const endDate = s.endDate ? new Date(s.endDate) : null;
-    return s.status === "active" && (!endDate || endDate >= new Date());
-  }).length;
+  const totalSubscriptions = state.subscriptions.length;
+  const activeSubscriptions = state.subscriptions.filter((s) => s.paymentStatus === "Paid" && new Date(s.endDate) >= new Date()).length;
 
   const avgClientsPerCoach = totalCoaches > 0 ? (totalClients / totalCoaches).toFixed(1) : "0";
 
   // Check for expiring subscriptions (within 7 days)
   const now = new Date();
   const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const expiringSoon = state.coachSubscriptions.filter((s) => {
-    if (s.status !== "active" || !s.endDate) return false;
+  const expiringSoon = state.subscriptions.filter((s) => {
     const endDate = new Date(s.endDate);
     return endDate >= now && endDate <= sevenDaysFromNow;
   }).length;
 
-  const expiredSubscriptions = state.coachSubscriptions.filter((s) => {
-    const endDate = s.endDate ? new Date(s.endDate) : null;
-    return s.status !== "active" || (endDate && endDate < now);
-  }).length;
+  const expiredSubscriptions = state.subscriptions.filter((s) => new Date(s.endDate) < now).length;
 
   const statCard = (
     icon: React.ReactNode,

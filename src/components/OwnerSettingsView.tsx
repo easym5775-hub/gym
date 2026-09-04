@@ -6,9 +6,10 @@ import { useState } from "react";
 import { useApp } from "../store";
 import { OwnerPageHeader } from "./OwnerShell";
 import { Settings as SettingsIcon, User, Shield, CreditCard, CheckCircle } from "lucide-react";
+import { toast } from "./ui";
 
 export function OwnerSettingsView() {
-  const { me, toast } = useApp();
+  const { me } = useApp();
   const [activeTab, setActiveTab] = useState<"profile" | "saas">("profile");
   const [defaultDuration, setDefaultDuration] = useState("30");
   const [autoRenew, setAutoRenew] = useState(false);
