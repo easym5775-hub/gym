@@ -9,6 +9,8 @@ import {
   Bell,
   Camera,
   Check,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   CreditCard,
   Dumbbell,
@@ -23,15 +25,15 @@ import {
   UtensilsCrossed,
   X,
 } from "lucide-react";
-import type { AppNotification } from "../types";
-import { CAT_META, GOAL_META, MEAL_META, MEAL_TYPES, NOTIFICATION_META, SUB_PAYMENT_META, SUB_STATE_META, WEEK_DAYS } from "../types";
-import { dayNum, fileToDataUrl, fmtDate, fmtMoney, relTime, round1, signed, todayISO } from "../lib";
+import type { AppNotification, Meal, MealType, NutritionTargets } from "../types";
+import { CAT_META, GOAL_META, MEAL_META, MEAL_TYPES, NOTIFICATION_META, SUB_PAYMENT_META, SUB_STATE_META, WEEK_DAYS, WEEK_SHORT } from "../types";
+import { dayNum, fileToDataUrl, fmtDate, fmtMoney, fmtTime, relTime, round1, signed, todayISO } from "../lib";
 import { attendance, currentSubscription, progressOf, remainingLabel, subscriptionState } from "../logic";
 import { useApp } from "../store";
-import { Avatar, Badge, EmptyState, MoodPicker, SectionCard, Toggle, btnPrimary, btnSecondary, btnSm, chip } from "./ui";
+import { Avatar, Badge, EmptyState, MoodPicker, SectionCard, Toggle, btnPrimary, btnSecondary, btnSm, chip, useCountUp } from "./ui";
 import { WeightLine } from "./Chart";
 
-type Tab = "today" | "checkin" | "progress" | "chat" | "subscription";
+type Tab = "today" | "nutrition" | "checkin" | "progress" | "chat" | "subscription";
 
 export function ClientApp({ onLogout }: { onLogout: () => void }) {
   const { state, me, markAllNotificationsRead } = useApp();
@@ -65,6 +67,7 @@ export function ClientApp({ onLogout }: { onLogout: () => void }) {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "today", label: "Today" },
+    { id: "nutrition", label: "Nutrition" },
     { id: "checkin", label: "Check-in" },
     { id: "progress", label: "Progress" },
     { id: "chat", label: "Chat" },
@@ -74,7 +77,7 @@ export function ClientApp({ onLogout }: { onLogout: () => void }) {
   const onNotifTap = (n: AppNotification) => {
     if (n.kind === "message") setTab("chat");
     else if (n.kind === "plan_updated") setTab("today");
-    else if (n.kind === "meal_updated") setTab("today");
+    else if (n.kind === "meal_updated") setTab("nutrition");
     else if (n.kind === "subscription") setTab("subscription");
     setBellOpen(false);
   };
@@ -169,11 +172,284 @@ export function ClientApp({ onLogout }: { onLogout: () => void }) {
 
       <main className="relative z-10 mx-auto w-full max-w-4xl px-4 py-6 sm:px-6">
         {tab === "today" && <TodayTab plans={plans} meals={meals} exercises={state.exercises} onCheckIn={() => setTab("checkin")} sessionsToday={sessions.filter((s) => s.date === todayISO())} />}
+        {tab === "nutrition" && <NutritionTab clientId={clientId} client={client} allMeals={state.meals} />}
         {tab === "checkin" && <CheckInTab clientId={clientId} onDone={() => setTab("progress")} alreadyToday={checkIns.some((c) => c.date === todayISO())} />}
         {tab === "progress" && <ProgressTab checkIns={checkIns} sessionsCount={attendance(sessions)} />}
         {tab === "chat" && <ChatTab clientId={clientId} />}
         {tab === "subscription" && <SubscriptionTab clientId={clientId} />}
       </main>
+    </div>
+  );
+}
+
+/* ---------------- nutrition (weekly plan) ---------------- */
+
+function NutritionTab({ clientId, client, allMeals }: { clientId: string; client: Client; allMeals: Meal[] }) {
+  const [selectedDay, setSelectedDay] = useState<number>(dayNum()); // Default to today's day
+  const meals = useMemo(() => allMeals.filter((m) => m.clientId === clientId), [allMeals, clientId]);
+  
+  // Filter meals for selected day
+  const dayMeals = useMemo(() => meals.filter((m) => m.day === selectedDay), [meals, selectedDay]);
+  
+  // Sort meals by time then by type order
+  const sortedMeals = useMemo(() => {
+    const typeOrder: Record<MealType, number> = { Breakfast: 0, Lunch: 1, Dinner: 2, Snack: 3 };
+    return [...dayMeals].sort((a, b) => {
+      if (a.time && b.time) return a.time.localeCompare(b.time);
+      if (a.time) return -1;
+      if (b.time) return 1;
+      return typeOrder[a.type] - typeOrder[b.type];
+    });
+  }, [dayMeals]);
+  
+  // Calculate daily totals
+  const dailyTotals = useMemo(
+    () =>
+      dayMeals.reduce(
+        (acc, m) => ({
+          calories: acc.calories + m.calories,
+          protein: acc.protein + m.protein,
+          carbs: acc.carbs + m.carbs,
+          fats: acc.fats + m.fats,
+        }),
+        { calories: 0, protein: 0, carbs: 0, fats: 0 }
+      ),
+    [dayMeals]
+  );
+  
+  // Get animated values for totals
+  const animCalories = useCountUp(dailyTotals.calories, 600);
+  const animProtein = useCountUp(dailyTotals.protein, 600);
+  const animCarbs = useCountUp(dailyTotals.carbs, 600);
+  const animFats = useCountUp(dailyTotals.fats, 600);
+  
+  // Weekly overview data
+  const weeklyOverview = useMemo(() => {
+    const today = dayNum();
+    const daysData = Array.from({ length: 7 }, (_, i) => {
+      const day = i + 1;
+      const dayMeals = meals.filter((m) => m.day === day);
+      return {
+        day,
+        name: WEEK_DAYS[i],
+        short: WEEK_SHORT[i],
+        mealCount: dayMeals.length,
+        calories: dayMeals.reduce((s, m) => s + m.calories, 0),
+        hasPlan: dayMeals.length > 0,
+        isToday: day === today,
+      };
+    });
+    return daysData;
+  }, [meals]);
+  
+  // Nutrition targets
+  const targets = client.nutritionTargets;
+  const isToday = selectedDay === dayNum();
+  
+  // Group meals by type for display
+  const mealsByType = useMemo(() => {
+    const grouped: Record<string, Meal[]> = {};
+    for (const meal of sortedMeals) {
+      if (!grouped[meal.type]) grouped[meal.type] = [];
+      grouped[meal.type].push(meal);
+    }
+    return grouped;
+  }, [sortedMeals]);
+  
+  return (
+    <div className="grid gap-4">
+      {/* Header with TODAY indicator */}
+      <div className="rise relative overflow-hidden rounded-2xl border border-night-700 bg-night-850 p-5 sm:p-6">
+        <div className="pointer-events-none absolute inset-0 opacity-[0.35]" style={{ backgroundImage: "repeating-linear-gradient(-45deg, transparent 0 14px, rgba(205,241,75,0.04) 14px 15px)" }} />
+        <div className="relative">
+          <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-mist-500">Weekly Nutrition Plan</p>
+          <h1 className="mt-1 font-display text-[36px] font-bold uppercase leading-[0.92] text-mist-100 sm:text-[44px]">
+            {isToday ? "TODAY" : WEEK_DAYS[selectedDay - 1]}{" "}
+            <span className={isToday ? "text-volt-400" : "text-mist-400"}>· {WEEK_DAYS[selectedDay - 1]}</span>
+          </h1>
+          <p className="mt-2 text-sm text-mist-400">
+            {isToday ? "This is your nutrition plan for today" : `Your assigned meals for ${WEEK_DAYS[selectedDay - 1]}`}
+          </p>
+        </div>
+      </div>
+
+      {/* Week Navigation */}
+      <div className="rise rounded-xl border border-night-700 bg-night-850 p-3" style={{ animationDelay: "60ms" }}>
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          {weeklyOverview.map((d) => {
+            const isSelected = selectedDay === d.day;
+            const isCurrentDay = d.day === dayNum();
+            return (
+              <button
+                key={d.day}
+                onClick={() => setSelectedDay(d.day)}
+                className={`flex min-w-[3.25rem] flex-col items-center justify-center rounded-lg border px-2 py-2.5 text-xs font-bold transition-all duration-200 ${
+                  isSelected
+                    ? "border-volt-400 bg-volt-400/15 text-volt-300 shadow-[0_0_12px_-2px_rgba(205,241,75,0.3)]"
+                    : d.hasPlan
+                    ? "border-night-600 bg-night-800 text-mist-200 hover:border-night-500 hover:bg-night-750"
+                    : "border-night-700 bg-night-900 text-mist-500 hover:border-night-600"
+                }`}
+              >
+                <span>{d.short}</span>
+                {isCurrentDay && !isSelected && <span className="mt-0.5 h-1 w-1 rounded-full bg-volt-400" />}
+                {isSelected && <span className="mt-0.5 h-1 w-1 rounded-full bg-volt-400" />}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Daily Summary */}
+      <div className="rise rounded-xl border border-night-700 bg-night-850 p-5" style={{ animationDelay: "100ms" }}>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="grid h-12 w-12 place-items-center rounded-lg bg-warn-400/15 text-warn-300">
+              <Flame className="h-6 w-6" />
+            </span>
+            <div>
+              <p className="font-display text-[28px] font-bold leading-7 text-mist-100">
+                {Math.round(animCalories).toLocaleString("en-US")}
+                <span className="ms-1.5 text-sm font-semibold text-mist-500">kcal</span>
+              </p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-mist-500">{WEEK_DAYS[selectedDay - 1]}</p>
+            </div>
+          </div>
+          <div className="flex gap-5">
+            {([
+              ["Protein", animProtein, "text-volt-300"],
+              ["Carbs", animCarbs, "text-sky-300"],
+              ["Fats", animFats, "text-warn-300"],
+            ] as const).map(([label, v, tone]) => (
+              <div key={label} className="text-center">
+                <p className={`font-display text-xl font-bold ${tone}`}>{Math.round(v)}g</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-mist-500">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Targets Comparison */}
+        {targets && (
+          <div className="mt-4 grid grid-cols-2 gap-3 pt-4 sm:grid-cols-4 sm:gap-4 border-t border-night-700">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-mist-500">Target</p>
+              <p className="font-display text-base font-bold text-mist-300">{targets.calories} kcal</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-mist-500">Protein</p>
+              <p className={`font-display text-base font-bold ${dailyTotals.protein >= targets.protein ? "text-volt-300" : "text-mist-400"}`}>
+                {dailyTotals.protein} / {targets.protein}g
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-mist-500">Carbs</p>
+              <p className={`font-display text-base font-bold ${dailyTotals.carbs >= targets.carbs ? "text-sky-300" : "text-mist-400"}`}>
+                {dailyTotals.carbs} / {targets.carbs}g
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-mist-500">Fat</p>
+              <p className={`font-display text-base font-bold ${dailyTotals.fats >= targets.fats ? "text-warn-300" : "text-mist-400"}`}>
+                {dailyTotals.fats} / {targets.fats}g
+              </p>
+            </div>
+          </div>
+        )}
+        
+        {/* Water target if available */}
+        {targets?.water && (
+          <div className="mt-3 flex items-center gap-2 text-mist-400">
+            <Droplets className="h-4 w-4" />
+            <span className="text-xs font-bold">Water target: {targets.water}L / day</span>
+          </div>
+        )}
+      </div>
+
+      {/* Meals List */}
+      <div className="rise" style={{ animationDelay: "140ms" }}>
+        <h2 className="mb-3 text-lg font-bold uppercase tracking-wider text-mist-300">Meals</h2>
+
+        {sortedMeals.length === 0 ? (
+          <SectionCard title="" icon={<UtensilsCrossed className="h-5 w-5" />} bodyCls="p-6">
+            <div className="text-center py-8">
+              <UtensilsCrossed className="mx-auto h-12 w-12 text-night-500" />
+              <p className="mt-3 text-sm font-semibold text-mist-400">No nutrition plan for this day</p>
+              <p className="mt-1 text-xs text-mist-500">Your coach hasn't assigned meals for {WEEK_DAYS[selectedDay - 1]} yet</p>
+            </div>
+          </SectionCard>
+        ) : (
+          <ul className="grid gap-3">
+            {sortedMeals.map((meal, idx) => (
+              <li
+                key={meal.id}
+                className="group rise rounded-xl border border-night-700 bg-night-850 p-4 transition hover:border-night-600"
+                style={{ animationDelay: `${idx * 40}ms` }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge className={MEAL_META[meal.type].chip}>{meal.type}</Badge>
+                      {meal.time && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-mist-500">
+                          <span className="font-display text-xs tnum">{fmtTime(meal.time)}</span>
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-2 text-base font-semibold leading-snug text-mist-100">{meal.description}</p>
+                    <div className="mt-2 flex items-center gap-4 flex-wrap">
+                      <span className="font-display text-lg font-bold text-warn-300">{meal.calories} kcal</span>
+                      <span className="text-sm font-bold text-volt-300">P {meal.protein}g</span>
+                      <span className="text-sm font-bold text-sky-300">C {meal.carbs}g</span>
+                      <span className="text-sm font-bold text-warn-300">F {meal.fats}g</span>
+                    </div>
+                    {meal.notes && (
+                      <p className="mt-2 text-xs text-mist-500 italic">{meal.notes}</p>
+                    )}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      
+      {/* Weekly Overview */}
+      <SectionCard title="Week Overview" icon={<ClipboardList className="h-4.5 w-4.5" />} delay={200} bodyCls="p-3">
+        <div className="grid grid-cols-7 gap-2">
+          {weeklyOverview.map((d) => (
+            <div
+              key={d.day}
+              className={`rounded-lg border p-2 text-center transition ${
+                d.hasPlan
+                  ? "border-night-600 bg-night-800"
+                  : "border-night-700 bg-night-900"
+              } ${selectedDay === d.day ? "ring-1 ring-volt-400" : ""}`}
+            >
+              <p className="text-[10px] font-bold text-mist-500">{d.short}</p>
+              <p className={`mt-1 font-display text-sm font-bold ${d.hasPlan ? "text-mist-200" : "text-mist-600"}`}>
+                {d.mealCount}
+              </p>
+              {d.isToday && (
+                <span className="mt-0.5 block h-1 w-1 rounded-full bg-volt-400 mx-auto" />
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex items-center justify-between text-xs">
+          <span className="text-mist-500">
+            {weeklyOverview.filter((d) => d.hasPlan).length} / 7 days planned
+          </span>
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1 text-mist-500">
+              <span className="h-2 w-2 rounded-full bg-volt-400" /> Has plan
+            </span>
+            <span className="flex items-center gap-1 text-mist-500">
+              <span className="h-2 w-2 rounded-full bg-night-700" /> No plan
+            </span>
+          </div>
+        </div>
+      </SectionCard>
     </div>
   );
 }
@@ -188,14 +464,16 @@ function TodayTab({
   sessionsToday,
 }: {
   plans: { id: string; day: number; exerciseId: string; sets: number; reps: number; rest: number; notes: string }[];
-  meals: { id: string; type: "Breakfast" | "Lunch" | "Dinner" | "Snack"; description: string; calories: number; protein: number; carbs: number; fats: number }[];
+  meals: Meal[];
   exercises: { id: string; name: string; category: "Chest" | "Back" | "Legs" | "Arms" | "Core" | "Cardio"; videoUrl: string }[];
   onCheckIn: () => void;
   sessionsToday: { id: string; time: string; type: string; status: string }[];
 }) {
   const dn = dayNum();
   const todayPlan = plans.filter((p) => p.day === dn);
-  const kcal = meals.reduce((s, m) => s + m.calories, 0);
+  // Filter meals for today's day only
+  const todayMeals = meals.filter((m) => m.day === dn);
+  const kcal = todayMeals.reduce((s, m) => s + m.calories, 0);
   const exOf = (id: string) => exercises.find((e) => e.id === id);
 
   return (
@@ -273,13 +551,13 @@ function TodayTab({
       </SectionCard>
 
       <SectionCard title="Today's meals" icon={<UtensilsCrossed className="h-4.5 w-4.5" />} delay={160} bodyCls="p-3">
-        {meals.length === 0 ? (
+        {todayMeals.length === 0 ? (
           <EmptyState icon={<UtensilsCrossed className="h-6 w-6" />} title="No meal plan yet" sub="Your coach hasn't assigned meals — check back soon." />
         ) : (
           <>
             <div className="grid gap-2 sm:grid-cols-2">
-              {MEAL_TYPES.filter((t) => meals.some((m) => m.type === t)).map((t) =>
-                meals
+              {MEAL_TYPES.filter((t) => todayMeals.some((m) => m.type === t)).map((t) =>
+                todayMeals
                   .filter((m) => m.type === t)
                   .map((m) => (
                     <div key={m.id} className="rounded-lg border border-night-700 bg-night-800 p-3 transition hover:border-night-500">
