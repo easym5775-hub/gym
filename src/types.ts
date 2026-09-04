@@ -169,6 +169,8 @@ export interface AppState {
   sessions: Session[];
   messages: Message[];
   notifications: AppNotification[];
+  coaches: Coach[];
+  coachSubscriptions: CoachSubscription[];
 }
 
 /* ---------------- input types ---------------- */
