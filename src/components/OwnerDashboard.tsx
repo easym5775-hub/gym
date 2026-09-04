@@ -3,14 +3,10 @@
    ================================================================ */
 
 import { useApp } from "../store";
-import { OwnerShell, OwnerPageHeader } from "./OwnerShell";
-import { signOut } from "../services/auth";
-import type { OwnerView } from "./OwnerShell";
-import { useState } from "react";
+import { OwnerPageHeader } from "./OwnerShell";
 import { Users, Shield, TrendingUp, AlertCircle, CheckCircle2, Clock, XCircle } from "lucide-react";
 
 export function OwnerDashboard() {
-  const [view, setView] = useState<OwnerView>("dashboard");
   const { me, state } = useApp();
 
   // Calculate dashboard metrics from real data
@@ -23,7 +19,7 @@ export function OwnerDashboard() {
   const activeClients = state.clients.filter((c) => c.status === "Active").length;
 
   const totalSubscriptions = state.subscriptions.length;
-  const activeSubscriptions = state.subscriptions.filter((s) => s.paymentStatus === "Paid").length;
+  const activeSubscriptions = state.subscriptions.filter((s) => s.paymentStatus === "Paid" && new Date(s.endDate) >= new Date()).length;
 
   const avgClientsPerCoach = totalCoaches > 0 ? (totalClients / totalCoaches).toFixed(1) : "0";
 
@@ -65,12 +61,8 @@ export function OwnerDashboard() {
     );
   };
 
-  if (view !== "dashboard") {
-    return null;
-  }
-
   return (
-    <OwnerShell view={view} setView={setView} onLogout={() => void signOut()}>
+    <>
       <OwnerPageHeader
         title="Owner Dashboard"
         sub="SaaS-level overview and control center"
@@ -228,6 +220,6 @@ export function OwnerDashboard() {
           <span className="font-bold text-volt-300">Demo Mode:</span> This dashboard shows real data from your current session. In production with Supabase, this would display aggregated data from all coaches and clients in your SaaS.
         </p>
       </div>
-    </OwnerShell>
+    </>
   );
 }
